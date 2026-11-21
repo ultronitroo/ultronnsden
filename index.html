@@ -114,8 +114,9 @@
       <!-- Sidebar Top Header -->
       <header class="h-16 px-4 flex items-center justify-between flex-shrink-0" style="background-color: var(--bg-header);">
         <div class="flex items-center gap-3 min-w-0">
-          <button id="btn-profile" type="button" class="w-10 h-10 rounded-full flex items-center justify-center font-semibold text-white text-sm flex-shrink-0 transition-transform active:scale-95" style="background-color: var(--accent);" title="Edit your profile">
+          <button id="btn-profile" type="button" class="w-10 h-10 rounded-full overflow-hidden flex items-center justify-center font-semibold text-white text-sm flex-shrink-0 transition-transform active:scale-95" style="background-color: var(--accent);" title="Edit your profile & photo">
             <span id="my-avatar-text">ME</span>
+            <img id="my-avatar-img" src="" alt="Profile" class="hidden w-full h-full object-cover" />
           </button>
           <div class="min-w-0">
             <div class="flex items-center gap-1.5">
@@ -146,10 +147,14 @@
         </div>
       </header>
 
-      <!-- Quick Connect Banner -->
-      <div class="px-3 py-2.5 border-b flex items-center justify-between gap-2" style="border-color: var(--border-color); background-color: var(--bg-sidebar);">
-        <button id="btn-open-connect-banner" type="button" class="w-full py-2 px-3 rounded-lg text-xs font-medium text-white flex items-center justify-center gap-2 transition-opacity hover:opacity-95" style="background-color: var(--accent);">
-          <i data-lucide="link" class="w-4 h-4"></i>
+      <!-- Quick Action Buttons: People Directory & P2P Connect -->
+      <div class="px-3 py-2.5 border-b flex flex-col gap-2" style="border-color: var(--border-color); background-color: var(--bg-sidebar);">
+        <button id="btn-open-directory" type="button" class="w-full py-2 px-3 rounded-lg text-xs font-medium text-white flex items-center justify-center gap-2 transition-opacity hover:opacity-95" style="background-color: var(--accent);">
+          <i data-lucide="globe" class="w-4 h-4"></i>
+          <span>People Directory (Search @username)</span>
+        </button>
+        <button id="btn-open-connect-banner" type="button" class="w-full py-1.5 px-3 rounded-lg text-xs font-medium border flex items-center justify-center gap-2 transition-colors hover:bg-white/5" style="border-color: var(--border-color); color: var(--text-primary);">
+          <i data-lucide="link" class="w-3.5 h-3.5"></i>
           <span>Connect with a Friend via Internet</span>
         </button>
       </div>
@@ -196,7 +201,7 @@
             <button id="btn-back-mobile" type="button" class="md:hidden p-1.5 rounded-full hover:bg-black/10" style="color: var(--text-secondary);" title="Back to chats">
               <i data-lucide="arrow-left" class="w-5 h-5"></i>
             </button>
-            <div id="active-avatar" class="w-10 h-10 rounded-full flex items-center justify-center font-semibold text-white text-sm flex-shrink-0" style="background-color: #6366f1;">
+            <div id="active-avatar" class="w-10 h-10 rounded-full overflow-hidden flex items-center justify-center font-semibold text-white text-sm flex-shrink-0" style="background-color: #6366f1;">
               DF
             </div>
             <div class="min-w-0">
@@ -526,6 +531,27 @@
         </button>
       </div>
       <div class="p-5 space-y-4">
+        <!-- Profile Picture Uploader -->
+        <div class="flex items-center gap-4">
+          <div id="profile-preview-wrap" class="w-16 h-16 rounded-full overflow-hidden flex items-center justify-center font-semibold text-white text-lg flex-shrink-0 border" style="background-color: var(--accent); border-color: var(--border-color);">
+            <span id="profile-preview-initials">ME</span>
+            <img id="profile-preview-img" src="" alt="Profile photo" class="hidden w-full h-full object-cover" />
+          </div>
+          <div class="space-y-1.5">
+            <div class="flex items-center gap-2">
+              <button id="btn-upload-avatar" type="button" class="px-3 py-1.5 rounded-lg text-xs font-medium text-white flex items-center gap-1.5" style="background-color: var(--accent);">
+                <i data-lucide="camera" class="w-3.5 h-3.5"></i>
+                <span>Upload Photo</span>
+              </button>
+              <button id="btn-remove-avatar" type="button" class="hidden px-2.5 py-1.5 rounded-lg text-xs font-medium text-rose-400 hover:bg-rose-500/10">
+                Remove
+              </button>
+            </div>
+            <p class="text-[11px]" style="color: var(--text-secondary);">Visible to everyone in the People Directory</p>
+            <input id="input-avatar-file" type="file" accept="image/*" class="hidden" />
+          </div>
+        </div>
+
         <div id="profile-account-badge" class="hidden p-3 rounded-xl border text-xs space-y-1" style="background-color: var(--bg-panel); border-color: var(--border-color);">
           <div class="flex items-center justify-between">
             <span class="font-semibold" id="profile-acct-username">@user</span>
@@ -619,6 +645,40 @@
     </div>
   </div>
 
+  <!-- Searchable People Directory Modal -->
+  <div id="modal-directory" class="hidden fixed inset-0 z-50 bg-black/65 backdrop-blur-xs flex items-center justify-center p-4">
+    <div class="w-full max-w-lg rounded-2xl shadow-2xl border overflow-hidden flex flex-col max-h-[85dvh]" style="background-color: var(--bg-sidebar); border-color: var(--border-color);">
+      <div class="px-5 py-4 flex items-center justify-between border-b flex-shrink-0" style="background-color: var(--bg-header); border-color: var(--border-color);">
+        <div class="flex items-center gap-2">
+          <i data-lucide="globe" class="w-5 h-5" style="color: var(--text-primary);"></i>
+          <div>
+            <h3 class="font-semibold text-base leading-tight">People Directory</h3>
+            <p class="text-[11px]" style="color: var(--text-secondary);">Search anyone by @username or name and start chatting</p>
+          </div>
+        </div>
+        <div class="flex items-center gap-1">
+          <button id="btn-refresh-directory" type="button" class="p-1.5 rounded-full hover:bg-black/10" style="color: var(--text-secondary);" title="Refresh directory">
+            <i data-lucide="refresh-cw" class="w-4 h-4"></i>
+          </button>
+          <button id="btn-close-directory" type="button" class="p-1.5 rounded-full hover:bg-black/10" style="color: var(--text-secondary);" title="Close">
+            <i data-lucide="x" class="w-5 h-5"></i>
+          </button>
+        </div>
+      </div>
+
+      <div class="p-3.5 border-b flex-shrink-0" style="border-color: var(--border-color);">
+        <div class="flex items-center gap-2 px-3 py-2 rounded-xl border" style="background-color: var(--bg-input); border-color: var(--border-color);">
+          <i data-lucide="search" class="w-4 h-4 flex-shrink-0" style="color: var(--text-secondary);"></i>
+          <input id="input-directory-search" type="text" placeholder="Search by @username, name, or email..." class="w-full bg-transparent text-sm outline-none" style="color: var(--text-primary);" />
+        </div>
+      </div>
+
+      <div id="directory-list" class="flex-1 overflow-y-auto p-3 space-y-2">
+        <!-- Populated dynamically -->
+      </div>
+    </div>
+  </div>
+
   <!-- Image Lightbox Modal -->
   <div id="modal-lightbox" class="hidden fixed inset-0 z-50 bg-black/85 flex items-center justify-center p-4">
     <button id="btn-close-lightbox" type="button" class="absolute top-4 right-4 p-2 rounded-full bg-white/10 text-white hover:bg-white/20">
@@ -679,6 +739,7 @@
             accounts: state.accounts,
             accountPromptDismissed: state.accountPromptDismissed,
             myName: state.myName,
+            myAvatar: state.myAvatar,
             myPeerId: state.myPeerId,
             darkMode: state.darkMode,
             soundEnabled: state.soundEnabled,
@@ -726,7 +787,9 @@
         accounts: (saved && Array.isArray(saved.accounts)) ? saved.accounts : [],
         accountPromptDismissed: saved ? Boolean(saved.accountPromptDismissed) : false,
         myName: (saved && saved.myName) || 'You',
+        myAvatar: (saved && saved.myAvatar) || '',
         myPeerId: (saved && saved.myPeerId) || makeShortId(),
+        directoryUsers: [],
         darkMode: saved ? Boolean(saved.darkMode) : true,
         soundEnabled: saved ? Boolean(saved.soundEnabled) : true,
         activeChatId: (saved && saved.activeChatId) || 'demo-friend',
@@ -757,6 +820,14 @@
         emptyState: document.getElementById('empty-state'),
         activeChatContainer: document.getElementById('active-chat-container'),
         myAvatarText: document.getElementById('my-avatar-text'),
+        myAvatarImg: document.getElementById('my-avatar-img'),
+        profilePreviewInitials: document.getElementById('profile-preview-initials'),
+        profilePreviewImg: document.getElementById('profile-preview-img'),
+        btnRemoveAvatar: document.getElementById('btn-remove-avatar'),
+        inputAvatarFile: document.getElementById('input-avatar-file'),
+        modalDirectory: document.getElementById('modal-directory'),
+        inputDirectorySearch: document.getElementById('input-directory-search'),
+        directoryList: document.getElementById('directory-list'),
         myNameLabel: document.getElementById('my-name-label'),
         myPeerId: document.getElementById('my-peer-id'),
         networkDot: document.getElementById('network-dot'),
@@ -947,6 +1018,23 @@
       function renderProfile() {
         el.myNameLabel.textContent = state.account ? `${state.myName} (@${state.account.username})` : state.myName;
         el.myAvatarText.textContent = initials(state.myName);
+        el.profilePreviewInitials.textContent = initials(state.myName);
+        const photo = (state.account && state.account.avatar) || state.myAvatar || '';
+        if (photo) {
+          el.myAvatarImg.src = photo;
+          el.myAvatarImg.classList.remove('hidden');
+          el.myAvatarText.classList.add('hidden');
+          el.profilePreviewImg.src = photo;
+          el.profilePreviewImg.classList.remove('hidden');
+          el.profilePreviewInitials.classList.add('hidden');
+          el.btnRemoveAvatar.classList.remove('hidden');
+        } else {
+          el.myAvatarImg.classList.add('hidden');
+          el.myAvatarText.classList.remove('hidden');
+          el.profilePreviewImg.classList.add('hidden');
+          el.profilePreviewInitials.classList.remove('hidden');
+          el.btnRemoveAvatar.classList.add('hidden');
+        }
         el.myPeerId.textContent = state.myPeerId;
         el.modalMyId.textContent = state.myPeerId;
         if (state.account) {
@@ -994,9 +1082,12 @@
             ? '<span class="w-2.5 h-2.5 rounded-full bg-emerald-500 border-2 border-white dark:border-slate-900 absolute bottom-0 right-0"></span>'
             : '';
 
+          const avatarContent = chat.avatar
+            ? `<img src="${chat.avatar}" alt="${escapeHtml(chat.name)}" class="w-full h-full object-cover rounded-full" />`
+            : escapeHtml(initials(chat.name));
           row.innerHTML = `
             <div class="relative w-11 h-11 rounded-full flex items-center justify-center font-semibold text-white text-sm flex-shrink-0" style="background-color: ${chat.color || '#00a884'};">
-              ${escapeHtml(initials(chat.name))}
+              ${avatarContent}
               ${statusDot}
             </div>
             <div class="flex-1 min-w-0">
@@ -1031,7 +1122,11 @@
         el.emptyState.classList.add('hidden');
         el.activeChatContainer.classList.remove('hidden');
 
-        el.activeAvatar.textContent = initials(chat.name);
+        if (chat.avatar) {
+          el.activeAvatar.innerHTML = `<img src="${chat.avatar}" alt="${escapeHtml(chat.name)}" class="w-full h-full object-cover" />`;
+        } else {
+          el.activeAvatar.textContent = initials(chat.name);
+        }
         el.activeAvatar.style.backgroundColor = chat.color || '#00a884';
         el.activeChatName.textContent = chat.name;
         if (chat.type === 'group') {
@@ -2486,6 +2581,187 @@
         }
       });
 
+      // ---------- Profile Picture Upload (Compressed 160x160 JPEG) ----------
+      function compressAvatar(file) {
+        return new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => {
+            const img = new Image();
+            img.onload = () => {
+              const canvas = document.createElement('canvas');
+              const size = 160;
+              canvas.width = size;
+              canvas.height = size;
+              const ctx = canvas.getContext('2d');
+              const minSide = Math.min(img.width, img.height);
+              const sx = (img.width - minSide) / 2;
+              const sy = (img.height - minSide) / 2;
+              ctx.drawImage(img, sx, sy, minSide, minSide, 0, 0, size, size);
+              resolve(canvas.toDataURL('image/jpeg', 0.8));
+            };
+            img.onerror = reject;
+            img.src = reader.result;
+          };
+          reader.onerror = reject;
+          reader.readAsDataURL(file);
+        });
+      }
+
+      document.getElementById('btn-upload-avatar').addEventListener('click', () => el.inputAvatarFile.click());
+      el.inputAvatarFile.addEventListener('change', async (e) => {
+        const file = e.target.files && e.target.files[0];
+        if (!file) return;
+        try {
+          const dataUrl = await compressAvatar(file);
+          state.myAvatar = dataUrl;
+          if (state.account) {
+            state.account.avatar = dataUrl;
+            if (fbEnabled && fbDb && state.account.uid) {
+              fbDb.collection('users').doc(state.account.uid).set({ avatar: dataUrl }, { merge: true }).catch(() => {});
+            }
+          }
+          saveState();
+          renderProfile();
+          showToast('Profile photo updated!');
+        } catch (_) {
+          showToast('Could not process image');
+        }
+        el.inputAvatarFile.value = '';
+      });
+
+      el.btnRemoveAvatar.addEventListener('click', () => {
+        state.myAvatar = '';
+        if (state.account) {
+          state.account.avatar = '';
+          if (fbEnabled && fbDb && state.account.uid) {
+            fbDb.collection('users').doc(state.account.uid).set({ avatar: '' }, { merge: true }).catch(() => {});
+          }
+        }
+        saveState();
+        renderProfile();
+        showToast('Profile photo removed');
+      });
+
+      // ---------- Searchable People Directory ----------
+      function renderDirectoryList() {
+        const q = el.inputDirectorySearch.value.trim().toLowerCase().replace(/^@/, '');
+        const myUid = state.account && state.account.uid;
+        const myEmail = state.account && state.account.email;
+        const list = state.directoryUsers.filter(u => {
+          if (myUid && u.uid === myUid) return false;
+          if (myEmail && u.email === myEmail) return false;
+          if (!q) return true;
+          return (u.username || '').toLowerCase().includes(q)
+            || (u.fullName || '').toLowerCase().includes(q)
+            || (u.email || '').toLowerCase().includes(q);
+        });
+
+        el.directoryList.innerHTML = '';
+        if (list.length === 0) {
+          el.directoryList.innerHTML = `<div class="p-8 text-center text-xs" style="color: var(--text-secondary);">No matching users found. Ask your friends to create an account so they appear here!</div>`;
+          return;
+        }
+
+        list.forEach(u => {
+          const row = document.createElement('div');
+          row.className = 'p-3 rounded-xl border flex items-center justify-between gap-3';
+          row.style.backgroundColor = 'var(--bg-panel)';
+          row.style.borderColor = 'var(--border-color)';
+
+          const avatarHtml = u.avatar
+            ? `<img src="${u.avatar}" alt="${escapeHtml(u.fullName || u.username)}" class="w-11 h-11 rounded-full object-cover flex-shrink-0" />`
+            : `<div class="w-11 h-11 rounded-full flex items-center justify-center font-semibold text-white text-sm flex-shrink-0" style="background-color: ${pickColor(u.uid || u.username || 'u')};">${escapeHtml(initials(u.fullName || u.username))}</div>`;
+
+          row.innerHTML = `
+            <div class="flex items-center gap-3 min-w-0">
+              ${avatarHtml}
+              <div class="min-w-0">
+                <p class="font-semibold text-sm truncate">${escapeHtml(u.fullName || u.username)}</p>
+                <p class="text-xs truncate" style="color: var(--text-secondary);">@${escapeHtml(u.username || 'user')}</p>
+              </div>
+            </div>
+            <button type="button" class="px-3.5 py-1.5 rounded-lg text-xs font-medium text-white flex items-center gap-1.5 flex-shrink-0" style="background-color: var(--accent);" data-dir-uid="${escapeHtml(u.uid || '')}">
+              <i data-lucide="message-square" class="w-3.5 h-3.5"></i>
+              <span>Message</span>
+            </button>
+          `;
+
+          row.querySelector('button').addEventListener('click', () => startChatWithDirectoryUser(u));
+          el.directoryList.appendChild(row);
+        });
+        if (window.lucide) lucide.createIcons();
+      }
+
+      async function loadDirectoryUsers() {
+        el.directoryList.innerHTML = '<div class="p-6 text-center text-xs" style="color: var(--text-secondary);">Loading directory...</div>';
+        if (fbEnabled && fbDb && state.account && state.account.uid) {
+          try {
+            const snap = await fbDb.collection('users').limit(100).get();
+            const users = [];
+            snap.forEach(doc => users.push(doc.data()));
+            state.directoryUsers = users;
+            renderDirectoryList();
+            return;
+          } catch (_) {}
+        }
+        // Fallback: local accounts + demo entry when not logged into Firebase
+        state.directoryUsers = state.accounts.length > 0
+          ? state.accounts
+          : [{ uid: 'demo-friend', fullName: 'Demo Friend', username: 'demo_friend', email: 'demo@pulsechat.local', avatar: '' }];
+        renderDirectoryList();
+      }
+
+      function startChatWithDirectoryUser(u) {
+        if (u.uid === 'demo-friend') {
+          el.modalDirectory.classList.add('hidden');
+          selectChat('demo-friend');
+          return;
+        }
+        if (!fbEnabled || !fbDb || !state.account || !state.account.uid) {
+          showToast('Please log in with your account first to message directory users');
+          return;
+        }
+        const pair = [state.account.uid, u.uid].sort();
+        const roomId = 'dm_' + pair[0] + '_' + pair[1];
+        const chatId = 'cloud-' + u.uid;
+        let chat = state.chats.find(c => c.id === chatId);
+        if (!chat) {
+          chat = {
+            id: chatId,
+            roomId,
+            name: u.fullName || u.username || u.email,
+            avatar: u.avatar || '',
+            type: 'cloud',
+            participants: [state.account.uid, u.uid],
+            participantNames: {
+              [state.account.uid]: state.myName,
+              [u.uid]: u.fullName || u.username || u.email
+            },
+            color: pickColor(u.uid),
+            status: 'online',
+            unread: 0,
+            messages: []
+          };
+          state.chats.unshift(chat);
+        } else if (u.avatar) {
+          chat.avatar = u.avatar;
+        }
+        subscribeCloudRoom(chat);
+        saveState();
+        renderChatList();
+        selectChat(chatId);
+        el.modalDirectory.classList.add('hidden');
+      }
+
+      document.getElementById('btn-open-directory').addEventListener('click', () => {
+        el.inputDirectorySearch.value = '';
+        el.modalDirectory.classList.remove('hidden');
+        loadDirectoryUsers();
+      });
+      document.getElementById('btn-close-directory').addEventListener('click', () => el.modalDirectory.classList.add('hidden'));
+      document.getElementById('btn-refresh-directory').addEventListener('click', loadDirectoryUsers);
+      el.inputDirectorySearch.addEventListener('input', renderDirectoryList);
+
       // Global Escape key closes open modals/popovers
       document.addEventListener('keydown', (e) => {
         if (e.key === 'Escape') {
@@ -2495,6 +2771,7 @@
           el.modalInfo.classList.add('hidden');
           el.modalLightbox.classList.add('hidden');
           el.modalGroup.classList.add('hidden');
+          el.modalDirectory.classList.add('hidden');
           el.modalAccount.classList.add('hidden');
         }
       });
