@@ -2159,6 +2159,11 @@
         const n = el.inputMyName.value.trim();
         if (n) {
           state.myName = n;
+          if (state.account) state.account.fullName = n;
+          const uid = (state.account && state.account.uid) || (fbAuth && fbAuth.currentUser && fbAuth.currentUser.uid);
+          if (fbEnabled && fbDb && uid) {
+            fbDb.collection('users').doc(uid).set({ fullName: n }, { merge: true }).catch(() => {});
+          }
           saveState();
           renderProfile();
         }
@@ -2614,31 +2619,35 @@
         try {
           const dataUrl = await compressAvatar(file);
           state.myAvatar = dataUrl;
-          if (state.account) {
-            state.account.avatar = dataUrl;
-            if (fbEnabled && fbDb && state.account.uid) {
-              fbDb.collection('users').doc(state.account.uid).set({ avatar: dataUrl }, { merge: true }).catch(() => {});
-            }
-          }
+          const uid = (state.account && state.account.uid) || (fbAuth && fbAuth.currentUser && fbAuth.currentUser.uid);
+          if (state.account) state.account.avatar = dataUrl;
           saveState();
           renderProfile();
-          showToast('Profile photo updated!');
+          if (fbEnabled && fbDb && uid) {
+            try {
+              await fbDb.collection('users').doc(uid).set({ avatar: dataUrl }, { merge: true });
+              showToast('Profile photo updated & synced!');
+            } catch (err) {
+              showToast('Photo saved locally (Firestore sync failed: ' + (err.code || 'check rules') + ')');
+            }
+          } else {
+            showToast('Profile photo updated!');
+          }
         } catch (_) {
           showToast('Could not process image');
         }
         el.inputAvatarFile.value = '';
       });
 
-      el.btnRemoveAvatar.addEventListener('click', () => {
+      el.btnRemoveAvatar.addEventListener('click', async () => {
         state.myAvatar = '';
-        if (state.account) {
-          state.account.avatar = '';
-          if (fbEnabled && fbDb && state.account.uid) {
-            fbDb.collection('users').doc(state.account.uid).set({ avatar: '' }, { merge: true }).catch(() => {});
-          }
-        }
+        const uid = (state.account && state.account.uid) || (fbAuth && fbAuth.currentUser && fbAuth.currentUser.uid);
+        if (state.account) state.account.avatar = '';
         saveState();
         renderProfile();
+        if (fbEnabled && fbDb && uid) {
+          fbDb.collection('users').doc(uid).set({ avatar: '' }, { merge: true }).catch(() => {});
+        }
         showToast('Profile photo removed');
       });
 
@@ -2700,6 +2709,19 @@
             const users = [];
             snap.forEach(doc => users.push(doc.data()));
             state.directoryUsers = users;
+            let updatedChatAvatar = false;
+            users.forEach(u => {
+              const c = state.chats.find(ch => ch.id === 'cloud-' + u.uid);
+              if (c && u.avatar !== undefined && c.avatar !== u.avatar) {
+                c.avatar = u.avatar;
+                updatedChatAvatar = true;
+              }
+            });
+            if (updatedChatAvatar) {
+              saveState();
+              renderChatList();
+              renderActiveChat();
+            }
             renderDirectoryList();
             return;
           } catch (_) {}
