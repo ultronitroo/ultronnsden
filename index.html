@@ -1,0 +1,2514 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PulseChat — Peer-to-Peer Web Messenger</title>
+  <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+  <script src="https://unpkg.com/lucide@0.460.0/dist/umd/lucide.min.js"></script>
+  <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/13.3.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/13.3.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/13.3.0/firebase-firestore-compat.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg-app: #2B3230;
+      --bg-sidebar: #f4f4f5;
+      --bg-header: #e4e4e7;
+      --bg-panel: #e4e4e7;
+      --bg-hover: #e4e4e7;
+      --bg-active: #d4d4d8;
+      --bg-msg-out: #18181b;
+      --bg-msg-in: #ffffff;
+      --bg-input: #ffffff;
+      --border-color: #d4d4d8;
+      --text-primary: #09090b;
+      --text-secondary: #52525b;
+      --accent: #18181b;
+      --accent-dark: #09090b;
+      --tick-read: #ffffff;
+    }
+
+    html.dark {
+      --bg-app: #2B3230;
+      --bg-sidebar: #09090b;
+      --bg-header: #111111;
+      --bg-panel: #18181b;
+      --bg-hover: #18181b;
+      --bg-active: #27272a;
+      --bg-msg-out: #09090b;
+      --bg-msg-in: #1b1f1e;
+      --bg-input: #1c1c1e;
+      --border-color: #27272a;
+      --text-primary: #f4f4f5;
+      --text-secondary: #a1a1aa;
+      --accent: #3f3f46;
+      --accent-dark: #27272a;
+      --tick-read: #e4e4e7;
+    }
+
+    * {
+      box-sizing: border-box;
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    }
+
+    body {
+      margin: 0;
+      background-color: var(--bg-app);
+      color: var(--text-primary);
+      overflow: hidden;
+      height: 100dvh;
+    }
+
+    .chat-wallpaper {
+      background-color: var(--bg-app);
+      background-image: radial-gradient(rgba(134, 150, 160, 0.14) 1px, transparent 1px);
+      background-size: 22px 22px;
+    }
+
+    /* Custom thin scrollbar */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: rgba(134, 150, 160, 0.35);
+      border-radius: 3px;
+    }
+    ::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    .msg-bubble-out {
+      background-color: var(--bg-msg-out);
+      color: #ffffff;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 10px 2px 10px 10px;
+    }
+
+    .msg-bubble-in {
+      background-color: var(--bg-msg-in);
+      color: var(--text-primary);
+      border-radius: 2px 10px 10px 10px;
+    }
+
+    @keyframes pulseDot {
+      0%, 80%, 100% { transform: scale(0.6); opacity: 0.4; }
+      40% { transform: scale(1); opacity: 1; }
+    }
+    .typing-dot {
+      animation: pulseDot 1.3s infinite ease-in-out;
+    }
+    .typing-dot:nth-child(2) { animation-delay: 0.15s; }
+    .typing-dot:nth-child(3) { animation-delay: 0.3s; }
+  </style>
+</head>
+<body class="antialiased select-none sm:select-text">
+  <!-- Main App Shell -->
+  <div id="app" class="flex h-[100dvh] w-full overflow-hidden">
+    <!-- Left Sidebar (Chats List) -->
+    <aside id="sidebar" class="w-full md:w-[360px] lg:w-[400px] flex-shrink-0 flex flex-col border-r" style="background-color: var(--bg-sidebar); border-color: var(--border-color);">
+      <!-- Sidebar Top Header -->
+      <header class="h-16 px-4 flex items-center justify-between flex-shrink-0" style="background-color: var(--bg-header);">
+        <div class="flex items-center gap-3 min-w-0">
+          <button id="btn-profile" type="button" class="w-10 h-10 rounded-full flex items-center justify-center font-semibold text-white text-sm flex-shrink-0 transition-transform active:scale-95" style="background-color: var(--accent);" title="Edit your profile">
+            <span id="my-avatar-text">ME</span>
+          </button>
+          <div class="min-w-0">
+            <div class="flex items-center gap-1.5">
+              <span id="my-name-label" class="font-semibold text-sm truncate">You</span>
+              <span id="network-dot" class="w-2.5 h-2.5 rounded-full bg-amber-400 flex-shrink-0" title="Connecting to P2P network..."></span>
+            </div>
+            <button id="btn-copy-id" type="button" class="text-xs flex items-center gap-1 truncate hover:underline" style="color: var(--text-secondary);" title="Click to copy your Chat ID">
+              <span>ID:</span>
+              <span id="my-peer-id" class="font-mono font-medium">initializing...</span>
+              <i data-lucide="copy" class="w-3 h-3 flex-shrink-0"></i>
+            </button>
+          </div>
+        </div>
+
+        <div class="flex items-center gap-1 flex-shrink-0">
+          <button id="btn-new-group" type="button" class="p-2 rounded-full hover:bg-black/5 dark:hover:bg-white/10 transition-colors" style="color: var(--text-secondary);" title="Create Group Chat">
+            <i data-lucide="users" class="w-5 h-5"></i>
+          </button>
+          <button id="btn-new-chat" type="button" class="p-2 rounded-full hover:bg-black/5 dark:hover:bg-white/10 transition-colors" style="color: var(--text-secondary);" title="Connect to a friend">
+            <i data-lucide="user-plus" class="w-5 h-5"></i>
+          </button>
+          <button id="btn-sound-toggle" type="button" class="p-2 rounded-full hover:bg-black/5 dark:hover:bg-white/10 transition-colors" style="color: var(--text-secondary);" title="Toggle notification sound">
+            <i data-lucide="volume-2" class="w-5 h-5"></i>
+          </button>
+          <button id="btn-theme-toggle" type="button" class="p-2 rounded-full hover:bg-black/5 dark:hover:bg-white/10 transition-colors" style="color: var(--text-secondary);" title="Toggle Dark/Light theme">
+            <i data-lucide="moon" class="w-5 h-5"></i>
+          </button>
+        </div>
+      </header>
+
+      <!-- Quick Connect Banner -->
+      <div class="px-3 py-2.5 border-b flex items-center justify-between gap-2" style="border-color: var(--border-color); background-color: var(--bg-sidebar);">
+        <button id="btn-open-connect-banner" type="button" class="w-full py-2 px-3 rounded-lg text-xs font-medium text-white flex items-center justify-center gap-2 transition-opacity hover:opacity-95" style="background-color: var(--accent);">
+          <i data-lucide="link" class="w-4 h-4"></i>
+          <span>Connect with a Friend via Internet</span>
+        </button>
+      </div>
+
+      <!-- Search Bar -->
+      <div class="px-3 py-2 border-b" style="border-color: var(--border-color);">
+        <div class="flex items-center gap-2 px-3 py-1.5 rounded-lg" style="background-color: var(--bg-panel);">
+          <i data-lucide="search" class="w-4 h-4 flex-shrink-0" style="color: var(--text-secondary);"></i>
+          <input id="chat-search-input" type="text" placeholder="Search chats or messages..." class="w-full bg-transparent text-sm outline-none" style="color: var(--text-primary);" />
+          <button id="btn-clear-search" type="button" class="hidden p-0.5 rounded-full hover:bg-black/10" style="color: var(--text-secondary);" title="Clear search">
+            <i data-lucide="x" class="w-3.5 h-3.5"></i>
+          </button>
+        </div>
+      </div>
+
+      <!-- Chat List -->
+      <div id="chat-list" class="flex-1 overflow-y-auto divide-y" style="border-color: var(--border-color);">
+        <!-- Populated dynamically -->
+      </div>
+    </aside>
+
+    <!-- Right Main Chat Area -->
+    <main id="chat-pane" class="hidden md:flex flex-1 flex-col h-full min-w-0 relative chat-wallpaper">
+      <!-- Empty State (shown if no chat selected) -->
+      <div id="empty-state" class="hidden flex-1 flex flex-col items-center justify-center p-8 text-center">
+        <div class="w-20 h-20 rounded-full flex items-center justify-center mb-5 shadow-sm" style="background-color: var(--bg-header); color: var(--accent);">
+          <i data-lucide="message-circle" class="w-10 h-10"></i>
+        </div>
+        <h1 class="text-2xl font-semibold mb-2">PulseChat Web</h1>
+        <p class="text-sm max-w-md mb-6" style="color: var(--text-secondary);">
+          Direct, encrypted peer-to-peer messaging over the internet. Share your Chat ID with a friend or enter theirs to start chatting—no phone number or account required.
+        </p>
+        <button id="btn-empty-connect" type="button" class="px-5 py-2.5 rounded-full text-sm font-medium text-white flex items-center gap-2 shadow-sm hover:opacity-95" style="background-color: var(--accent);">
+          <i data-lucide="user-plus" class="w-4 h-4"></i>
+          <span>Connect with a Friend</span>
+        </button>
+      </div>
+
+      <!-- Active Chat Container -->
+      <div id="active-chat-container" class="flex flex-col h-full w-full">
+        <!-- Chat Header -->
+        <header class="h-16 px-3 sm:px-4 flex items-center justify-between flex-shrink-0 border-b z-10" style="background-color: var(--bg-header); border-color: var(--border-color);">
+          <div class="flex items-center gap-2.5 sm:gap-3 min-w-0">
+            <button id="btn-back-mobile" type="button" class="md:hidden p-1.5 rounded-full hover:bg-black/10" style="color: var(--text-secondary);" title="Back to chats">
+              <i data-lucide="arrow-left" class="w-5 h-5"></i>
+            </button>
+            <div id="active-avatar" class="w-10 h-10 rounded-full flex items-center justify-center font-semibold text-white text-sm flex-shrink-0" style="background-color: #6366f1;">
+              DF
+            </div>
+            <div class="min-w-0">
+              <div class="flex items-center gap-2">
+                <h2 id="active-chat-name" class="font-semibold text-sm sm:text-base truncate">Demo Friend</h2>
+                <span id="active-e2e-badge" class="hidden sm:inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-emerald-500/15 text-emerald-600 dark:text-emerald-400">
+                  <i data-lucide="lock" class="w-2.5 h-2.5"></i> P2P
+                </span>
+              </div>
+              <p id="active-chat-status" class="text-xs truncate" style="color: var(--text-secondary);">online</p>
+            </div>
+          </div>
+
+          <div class="flex items-center gap-1 flex-shrink-0">
+            <button id="btn-in-chat-search" type="button" class="p-2 rounded-full hover:bg-black/5 dark:hover:bg-white/10 transition-colors" style="color: var(--text-secondary);" title="Search messages in this chat">
+              <i data-lucide="search" class="w-5 h-5"></i>
+            </button>
+            <button id="btn-reconnect-peer" type="button" class="hidden p-2 rounded-full hover:bg-black/5 dark:hover:bg-white/10 transition-colors" style="color: var(--text-secondary);" title="Reconnect to peer">
+              <i data-lucide="refresh-cw" class="w-5 h-5"></i>
+            </button>
+            <button id="btn-chat-info" type="button" class="p-2 rounded-full hover:bg-black/5 dark:hover:bg-white/10 transition-colors" style="color: var(--text-secondary);" title="Chat info & connection details">
+              <i data-lucide="info" class="w-5 h-5"></i>
+            </button>
+          </div>
+        </header>
+
+        <!-- In-chat search bar (toggleable) -->
+        <div id="in-chat-search-bar" class="hidden px-4 py-2 border-b flex items-center gap-2 z-10" style="background-color: var(--bg-sidebar); border-color: var(--border-color);">
+          <i data-lucide="search" class="w-4 h-4" style="color: var(--text-secondary);"></i>
+          <input id="in-chat-search-input" type="text" placeholder="Filter messages in this conversation..." class="flex-1 bg-transparent text-sm outline-none" />
+          <span id="in-chat-search-count" class="text-xs" style="color: var(--text-secondary);"></span>
+          <button id="btn-close-in-chat-search" type="button" class="p-1 rounded-full hover:bg-black/10" style="color: var(--text-secondary);">
+            <i data-lucide="x" class="w-4 h-4"></i>
+          </button>
+        </div>
+
+        <!-- Messages Feed -->
+        <div id="messages-feed" class="flex-1 overflow-y-auto px-3 sm:px-6 md:px-10 py-4 space-y-2 relative">
+          <!-- Populated dynamically -->
+        </div>
+
+        <!-- Scroll to Bottom Button -->
+        <button id="btn-scroll-bottom" type="button" class="hidden absolute bottom-20 right-5 z-20 w-10 h-10 rounded-full shadow-lg border flex items-center justify-center transition-transform hover:scale-105" style="background-color: var(--bg-header); border-color: var(--border-color); color: var(--text-primary);" title="Scroll to latest messages">
+          <i data-lucide="chevron-down" class="w-5 h-5"></i>
+        </button>
+
+        <!-- Typing Indicator -->
+        <div id="typing-indicator" class="hidden px-6 pb-2">
+          <div class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl shadow-sm msg-bubble-in">
+            <span class="w-2 h-2 rounded-full typing-dot" style="background-color: var(--text-secondary);"></span>
+            <span class="w-2 h-2 rounded-full typing-dot" style="background-color: var(--text-secondary);"></span>
+            <span class="w-2 h-2 rounded-full typing-dot" style="background-color: var(--text-secondary);"></span>
+          </div>
+        </div>
+
+        <!-- Reply Preview Banner -->
+        <div id="reply-banner" class="hidden px-4 py-2 border-t flex items-center justify-between gap-3" style="background-color: var(--bg-header); border-color: var(--border-color);">
+          <div class="border-l-4 pl-3 min-w-0 flex-1" style="border-color: var(--accent);">
+            <p id="reply-banner-sender" class="text-xs font-semibold truncate" style="color: var(--accent);"></p>
+            <p id="reply-banner-text" class="text-xs truncate" style="color: var(--text-secondary);"></p>
+          </div>
+          <button id="btn-cancel-reply" type="button" class="p-1.5 rounded-full hover:bg-black/10" style="color: var(--text-secondary);" title="Cancel reply">
+            <i data-lucide="x" class="w-4 h-4"></i>
+          </button>
+        </div>
+
+        <!-- Emoji Picker Popover -->
+        <div id="emoji-picker" class="hidden absolute bottom-20 left-4 z-30 w-72 rounded-xl shadow-xl border p-3" style="background-color: var(--bg-sidebar); border-color: var(--border-color);">
+          <div class="flex items-center justify-between mb-2">
+            <span class="text-xs font-semibold" style="color: var(--text-secondary);">Emojis</span>
+            <button id="btn-close-emoji" type="button" class="p-1 rounded hover:bg-black/10" style="color: var(--text-secondary);">
+              <i data-lucide="x" class="w-3.5 h-3.5"></i>
+            </button>
+          </div>
+          <div id="emoji-grid" class="grid grid-cols-8 gap-1 text-xl max-h-48 overflow-y-auto">
+            <!-- Populated by JS -->
+          </div>
+        </div>
+
+        <!-- Composer Footer -->
+        <footer class="px-3 py-2.5 flex items-end gap-2 flex-shrink-0 border-t relative z-20" style="background-color: var(--bg-header); border-color: var(--border-color);">
+          <button id="btn-emoji-toggle" type="button" class="p-2.5 rounded-full hover:bg-black/5 dark:hover:bg-white/10 transition-colors flex-shrink-0" style="color: var(--text-secondary);" title="Insert emoji">
+            <i data-lucide="smile" class="w-5 h-5"></i>
+          </button>
+          <button id="btn-attach" type="button" class="p-2.5 rounded-full hover:bg-black/5 dark:hover:bg-white/10 transition-colors flex-shrink-0" style="color: var(--text-secondary);" title="Send image or file">
+            <i data-lucide="paperclip" class="w-5 h-5"></i>
+          </button>
+          <input id="file-input" type="file" class="hidden" accept="image/*,.pdf,.txt,.zip,.doc,.docx" />
+
+          <div class="flex-1 rounded-2xl px-3.5 py-2 flex items-center" style="background-color: var(--bg-input);">
+            <textarea id="message-input" rows="1" placeholder="Type a message" class="w-full bg-transparent text-sm outline-none resize-none max-h-28 leading-5" style="color: var(--text-primary);"></textarea>
+          </div>
+
+          <span id="voice-timer" class="hidden px-2.5 py-1 rounded-full text-xs font-mono font-semibold text-rose-400 bg-rose-500/15 flex items-center gap-1.5 flex-shrink-0">
+            <span class="w-2 h-2 rounded-full bg-rose-500 animate-pulse"></span>
+            <span id="voice-timer-text">0:00</span>
+          </span>
+
+          <button id="btn-voice" type="button" class="p-2.5 rounded-full hover:bg-black/5 dark:hover:bg-white/10 transition-colors flex-shrink-0" style="color: var(--text-secondary);" title="Record voice note">
+            <i data-lucide="mic" class="w-5 h-5"></i>
+          </button>
+
+          <button id="btn-send" type="button" class="hidden p-2.5 rounded-full text-white transition-transform active:scale-95 flex-shrink-0" style="background-color: var(--accent);" title="Send message">
+            <i data-lucide="send" class="w-5 h-5"></i>
+          </button>
+        </footer>
+      </div>
+    </main>
+  </div>
+
+  <!-- Connect Modal (Internet P2P + Manual WebRTC Fallback) -->
+  <div id="modal-connect" class="hidden fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
+    <div class="w-full max-w-md rounded-2xl shadow-2xl border overflow-hidden" style="background-color: var(--bg-sidebar); border-color: var(--border-color);">
+      <div class="px-5 py-4 flex items-center justify-between border-b" style="background-color: var(--bg-header); border-color: var(--border-color);">
+        <h3 class="font-semibold text-base flex items-center gap-2">
+          <i data-lucide="globe" class="w-5 h-5" style="color: var(--accent);"></i>
+          <span>Connect with a Friend</span>
+        </h3>
+        <button id="btn-close-connect" type="button" class="p-1.5 rounded-full hover:bg-black/10" style="color: var(--text-secondary);">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <!-- Mode Tabs -->
+      <div class="flex border-b text-xs font-medium" style="border-color: var(--border-color);">
+        <button id="tab-mode-peerjs" type="button" class="flex-1 py-2.5 text-center border-b-2 transition-colors" style="border-color: var(--accent); color: var(--accent);">
+          Quick Chat ID (Internet)
+        </button>
+        <button id="tab-mode-manual" type="button" class="flex-1 py-2.5 text-center border-b-2 border-transparent transition-colors" style="color: var(--text-secondary);">
+          Manual Code (No Server)
+        </button>
+      </div>
+
+      <!-- Tab 1: PeerJS Internet Connect -->
+      <div id="panel-mode-peerjs" class="p-5 space-y-4">
+        <div class="p-3.5 rounded-xl border" style="background-color: var(--bg-panel); border-color: var(--border-color);">
+          <p class="text-xs font-medium mb-1" style="color: var(--text-secondary);">Your Chat ID (share this with your friend):</p>
+          <div class="flex items-center justify-between gap-2">
+            <code id="modal-my-id" class="text-sm font-mono font-semibold select-all break-all">initializing...</code>
+            <button id="btn-modal-copy-id" type="button" class="px-2.5 py-1 rounded-lg text-xs font-medium text-white flex-shrink-0" style="background-color: var(--accent);">
+              Copy
+            </button>
+          </div>
+        </div>
+
+        <div class="space-y-3">
+          <div>
+            <label for="input-friend-email" class="block text-xs font-medium mb-1" style="color: var(--text-secondary);">Friend's Email ID (Cloud Chat — works even offline)</label>
+            <div class="flex gap-2">
+              <input id="input-friend-email" type="email" placeholder="e.g. friend@example.com" class="flex-1 px-3 py-2 rounded-lg text-sm border outline-none" style="background-color: var(--bg-input); border-color: var(--border-color); color: var(--text-primary);" />
+              <button id="btn-find-by-email" type="button" class="px-3 py-2 rounded-lg text-xs font-medium text-white flex-shrink-0" style="background-color: var(--accent);">
+                Add Email
+              </button>
+            </div>
+          </div>
+          <div class="flex items-center gap-2 text-[11px]" style="color: var(--text-secondary);">
+            <span class="flex-1 h-px" style="background-color: var(--border-color);"></span>
+            <span>OR P2P CHAT ID</span>
+            <span class="flex-1 h-px" style="background-color: var(--border-color);"></span>
+          </div>
+          <div>
+            <label for="input-friend-name" class="block text-xs font-medium mb-1" style="color: var(--text-secondary);">Friend's Nickname (optional)</label>
+            <input id="input-friend-name" type="text" placeholder="e.g. Sam" class="w-full px-3 py-2 rounded-lg text-sm border outline-none" style="background-color: var(--bg-input); border-color: var(--border-color); color: var(--text-primary);" />
+          </div>
+          <div>
+            <label for="input-friend-id" class="block text-xs font-medium mb-1" style="color: var(--text-secondary);">Friend's Chat ID</label>
+            <input id="input-friend-id" type="text" placeholder="Paste your friend's ID (e.g. pulse-a1b2c3)" class="w-full px-3 py-2 rounded-lg text-sm font-mono border outline-none" style="background-color: var(--bg-input); border-color: var(--border-color); color: var(--text-primary);" />
+          </div>
+        </div>
+
+        <p id="connect-status-msg" class="text-xs hidden"></p>
+
+        <div class="flex items-center justify-end gap-2 pt-1">
+          <button id="btn-cancel-connect" type="button" class="px-4 py-2 rounded-lg text-xs font-medium hover:bg-black/5 dark:hover:bg-white/10" style="color: var(--text-secondary);">Cancel</button>
+          <button id="btn-do-connect" type="button" class="px-4 py-2 rounded-lg text-xs font-medium text-white flex items-center gap-1.5" style="background-color: var(--accent);">
+            <i data-lucide="plug" class="w-3.5 h-3.5"></i>
+            <span>Connect Now</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Tab 2: Manual WebRTC Offer/Answer -->
+      <div id="panel-mode-manual" class="hidden p-5 space-y-3.5">
+        <p class="text-xs leading-relaxed" style="color: var(--text-secondary);">
+          Use this if a strict firewall blocks the signaling server. One person creates an <strong>Invite Code</strong> and sends it; the other pastes it to generate a <strong>Reply Code</strong>.
+        </p>
+
+        <div class="flex gap-2">
+          <button id="btn-manual-create-offer" type="button" class="flex-1 py-2 px-3 rounded-lg text-xs font-medium text-white" style="background-color: var(--accent);">
+            1. Create Invite Code
+          </button>
+          <button id="btn-manual-copy-code" type="button" class="hidden py-2 px-3 rounded-lg text-xs font-medium border" style="border-color: var(--border-color);">
+            Copy Code
+          </button>
+        </div>
+
+        <textarea id="manual-code-box" rows="4" placeholder="Invite or Reply code will appear here—or paste your friend's code here..." class="w-full p-2.5 rounded-lg text-xs font-mono border outline-none resize-none" style="background-color: var(--bg-input); border-color: var(--border-color); color: var(--text-primary);"></textarea>
+
+        <div class="flex items-center justify-between gap-2">
+          <button id="btn-manual-accept" type="button" class="w-full py-2 px-3 rounded-lg text-xs font-medium border hover:bg-black/5 dark:hover:bg-white/10" style="border-color: var(--border-color);">
+            2. Apply Pasted Code
+          </button>
+        </div>
+        <p id="manual-status-msg" class="text-xs" style="color: var(--text-secondary);"></p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Create / Log In Account Modal -->
+  <div id="modal-account" class="hidden fixed inset-0 z-50 bg-black/65 backdrop-blur-xs flex items-center justify-center p-4">
+    <div class="w-full max-w-md rounded-2xl shadow-2xl border overflow-hidden" style="background-color: var(--bg-sidebar); border-color: var(--border-color);">
+      <div class="px-5 py-4 flex items-center justify-between border-b" style="background-color: var(--bg-header); border-color: var(--border-color);">
+        <div class="flex items-center gap-2">
+          <div class="w-8 h-8 rounded-full flex items-center justify-center text-white" style="background-color: var(--accent);">
+            <i data-lucide="user-check" class="w-4 h-4"></i>
+          </div>
+          <div>
+            <h3 id="acct-modal-title" class="font-semibold text-base leading-tight">Account Access</h3>
+            <p class="text-[11px]" style="color: var(--text-secondary);">Create an account, log in, or sync from another device</p>
+          </div>
+        </div>
+        <button id="btn-close-account" type="button" class="p-1.5 rounded-full hover:bg-black/10" style="color: var(--text-secondary);" title="Close">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <!-- Tabs: Create Account | Log In | Sync Device -->
+      <div class="flex border-b text-xs font-medium" style="border-color: var(--border-color);">
+        <button id="tab-acct-signup" type="button" class="flex-1 py-2.5 text-center border-b-2 transition-colors" style="border-color: var(--text-primary); color: var(--text-primary);">
+          Create Account
+        </button>
+        <button id="tab-acct-login" type="button" class="flex-1 py-2.5 text-center border-b-2 border-transparent transition-colors" style="color: var(--text-secondary);">
+          Log In
+        </button>
+        <button id="tab-acct-sync" type="button" class="flex-1 py-2.5 text-center border-b-2 border-transparent transition-colors" style="color: var(--text-secondary);">
+          Other Device
+        </button>
+      </div>
+
+      <!-- Tab 1: Create Account -->
+      <form id="form-create-account" class="p-5 space-y-3.5" novalidate>
+        <div>
+          <label for="acct-fullname" class="block text-xs font-medium mb-1" style="color: var(--text-secondary);">Full Name</label>
+          <input id="acct-fullname" type="text" maxlength="40" placeholder="e.g. Alex Morgan" class="w-full px-3 py-2 rounded-lg text-sm border outline-none" style="background-color: var(--bg-input); border-color: var(--border-color); color: var(--text-primary);" required />
+        </div>
+        <div>
+          <label for="acct-username" class="block text-xs font-medium mb-1" style="color: var(--text-secondary);">Username</label>
+          <input id="acct-username" type="text" maxlength="24" placeholder="e.g. alex_m" class="w-full px-3 py-2 rounded-lg text-sm border outline-none" style="background-color: var(--bg-input); border-color: var(--border-color); color: var(--text-primary);" required />
+        </div>
+        <div>
+          <label for="acct-email" class="block text-xs font-medium mb-1" style="color: var(--text-secondary);">Email ID</label>
+          <input id="acct-email" type="email" maxlength="80" placeholder="e.g. alex@example.com" class="w-full px-3 py-2 rounded-lg text-sm border outline-none" style="background-color: var(--bg-input); border-color: var(--border-color); color: var(--text-primary);" required />
+        </div>
+        <div>
+          <label for="acct-password" class="block text-xs font-medium mb-1" style="color: var(--text-secondary);">Password</label>
+          <div class="relative">
+            <input id="acct-password" type="password" minlength="4" maxlength="64" placeholder="Create a password (min 4 chars)" class="w-full px-3 py-2 pr-10 rounded-lg text-sm border outline-none" style="background-color: var(--bg-input); border-color: var(--border-color); color: var(--text-primary);" required />
+            <button id="btn-toggle-acct-pw" type="button" class="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 rounded hover:bg-black/10" style="color: var(--text-secondary);" title="Show or hide password">
+              <i data-lucide="eye" class="w-4 h-4"></i>
+            </button>
+          </div>
+        </div>
+
+        <p id="acct-error-msg" class="hidden text-xs text-rose-500"></p>
+
+        <div class="flex items-center justify-between gap-2 pt-2">
+          <button id="btn-skip-account" type="button" class="px-3 py-2 rounded-lg text-xs font-medium hover:bg-black/5 dark:hover:bg-white/10" style="color: var(--text-secondary);">
+            Continue as Guest
+          </button>
+          <button type="submit" class="px-5 py-2 rounded-lg text-xs font-semibold text-white flex items-center gap-1.5" style="background-color: var(--accent);">
+            <i data-lucide="check" class="w-4 h-4"></i>
+            <span>Create Account</span>
+          </button>
+        </div>
+      </form>
+
+      <!-- Tab 2: Log In (Email ID & Password) -->
+      <form id="form-login-account" class="hidden p-5 space-y-3.5" novalidate>
+        <div>
+          <label for="login-email" class="block text-xs font-medium mb-1" style="color: var(--text-secondary);">Email ID</label>
+          <input id="login-email" type="email" maxlength="80" placeholder="Enter your registered email" class="w-full px-3 py-2 rounded-lg text-sm border outline-none" style="background-color: var(--bg-input); border-color: var(--border-color); color: var(--text-primary);" required />
+        </div>
+        <div>
+          <label for="login-password" class="block text-xs font-medium mb-1" style="color: var(--text-secondary);">Password</label>
+          <input id="login-password" type="password" maxlength="64" placeholder="Enter your password" class="w-full px-3 py-2 rounded-lg text-sm border outline-none" style="background-color: var(--bg-input); border-color: var(--border-color); color: var(--text-primary);" required />
+        </div>
+
+        <p id="login-error-msg" class="hidden text-xs text-rose-500"></p>
+        <p class="text-[11px] leading-relaxed" style="color: var(--text-secondary);">
+          Logging in on a new phone or computer? Use the <strong>Other Device</strong> tab to paste your Account Sync Code once.
+        </p>
+
+        <div class="flex items-center justify-end gap-2 pt-1">
+          <button type="submit" class="px-5 py-2 rounded-lg text-xs font-semibold text-white flex items-center gap-1.5" style="background-color: var(--accent);">
+            <i data-lucide="log-in" class="w-4 h-4"></i>
+            <span>Log In</span>
+          </button>
+        </div>
+      </form>
+
+      <!-- Tab 3: Other Device Sync Code -->
+      <div id="panel-acct-sync" class="hidden p-5 space-y-3.5">
+        <p class="text-xs leading-relaxed" style="color: var(--text-secondary);">
+          Copy your <strong>Account Sync Code</strong> on your first device and paste it here on your second device to restore your Email, Username, and Chat ID.
+        </p>
+        <textarea id="sync-code-input" rows="3" placeholder="Paste Account Sync Code here..." class="w-full p-2.5 rounded-lg text-xs font-mono border outline-none resize-none" style="background-color: var(--bg-input); border-color: var(--border-color); color: var(--text-primary);"></textarea>
+        <p id="sync-error-msg" class="hidden text-xs text-rose-500"></p>
+        <div class="flex items-center justify-between gap-2">
+          <button id="btn-copy-my-sync" type="button" class="px-3 py-2 rounded-lg text-xs font-medium border hover:bg-black/5 dark:hover:bg-white/10" style="border-color: var(--border-color);">
+            Copy My Sync Code
+          </button>
+          <button id="btn-apply-sync" type="button" class="px-4 py-2 rounded-lg text-xs font-semibold text-white" style="background-color: var(--accent);">
+            Restore Account
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Profile Modal -->
+  <div id="modal-profile" class="hidden fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
+    <div class="w-full max-w-sm rounded-2xl shadow-2xl border overflow-hidden" style="background-color: var(--bg-sidebar); border-color: var(--border-color);">
+      <div class="px-5 py-4 flex items-center justify-between border-b" style="background-color: var(--bg-header); border-color: var(--border-color);">
+        <h3 class="font-semibold text-base">Your Profile & Account</h3>
+        <button id="btn-close-profile" type="button" class="p-1.5 rounded-full hover:bg-black/10" style="color: var(--text-secondary);">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+      <div class="p-5 space-y-4">
+        <div id="profile-account-badge" class="hidden p-3 rounded-xl border text-xs space-y-1" style="background-color: var(--bg-panel); border-color: var(--border-color);">
+          <div class="flex items-center justify-between">
+            <span class="font-semibold" id="profile-acct-username">@user</span>
+            <span class="px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-500 text-[10px] font-medium">Account Active</span>
+          </div>
+          <p id="profile-acct-email" style="color: var(--text-secondary);"></p>
+        </div>
+        <div>
+          <label for="input-my-name" class="block text-xs font-medium mb-1" style="color: var(--text-secondary);">Display Name</label>
+          <input id="input-my-name" type="text" maxlength="28" class="w-full px-3 py-2 rounded-lg text-sm border outline-none" style="background-color: var(--bg-input); border-color: var(--border-color); color: var(--text-primary);" />
+        </div>
+        <div id="profile-sync-row" class="hidden pt-1">
+          <button id="btn-profile-copy-sync" type="button" class="w-full py-2 px-3 rounded-lg text-xs font-medium border flex items-center justify-center gap-1.5 hover:bg-black/5 dark:hover:bg-white/10" style="border-color: var(--border-color);">
+            <i data-lucide="smartphone" class="w-3.5 h-3.5"></i>
+            <span>Copy Sync Code for Another Device</span>
+          </button>
+        </div>
+        <div class="flex items-center justify-between gap-2 pt-1">
+          <div class="flex items-center gap-3">
+            <button id="btn-open-create-account" type="button" class="text-xs font-medium hover:underline" style="color: var(--text-secondary);">
+              Create / Switch Account
+            </button>
+            <button id="btn-logout-account" type="button" class="hidden text-xs font-medium text-rose-500 hover:underline">
+              Log Out
+            </button>
+          </div>
+          <button id="btn-save-profile" type="button" class="px-4 py-2 rounded-lg text-xs font-medium text-white" style="background-color: var(--accent);">Save</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Chat Info Modal -->
+  <div id="modal-info" class="hidden fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
+    <div class="w-full max-w-sm rounded-2xl shadow-2xl border overflow-hidden" style="background-color: var(--bg-sidebar); border-color: var(--border-color);">
+      <div class="px-5 py-4 flex items-center justify-between border-b" style="background-color: var(--bg-header); border-color: var(--border-color);">
+        <h3 class="font-semibold text-base">Conversation Details</h3>
+        <button id="btn-close-info" type="button" class="p-1.5 rounded-full hover:bg-black/10" style="color: var(--text-secondary);">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+      <div class="p-5 space-y-3 text-sm">
+        <div>
+          <span class="text-xs" style="color: var(--text-secondary);">Contact Name</span>
+          <p id="info-contact-name" class="font-semibold"></p>
+        </div>
+        <div>
+          <span class="text-xs" style="color: var(--text-secondary);">Connection Type / Peer ID</span>
+          <p id="info-contact-id" class="font-mono text-xs break-all"></p>
+        </div>
+        <div>
+          <span class="text-xs" style="color: var(--text-secondary);">Status</span>
+          <p id="info-contact-status" class="text-xs"></p>
+        </div>
+        <div class="pt-3 border-t flex items-center justify-between" style="border-color: var(--border-color);">
+          <button id="btn-clear-chat" type="button" class="text-xs font-medium text-rose-500 hover:underline">Clear messages</button>
+          <button id="btn-delete-chat" type="button" class="text-xs font-medium text-rose-600 hover:underline">Delete chat</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Create Group Modal -->
+  <div id="modal-group" class="hidden fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+    <div class="w-full max-w-md rounded-2xl shadow-2xl border overflow-hidden" style="background-color: var(--bg-sidebar); border-color: var(--border-color);">
+      <div class="px-5 py-4 flex items-center justify-between border-b" style="background-color: var(--bg-header); border-color: var(--border-color);">
+        <h3 class="font-semibold text-base flex items-center gap-2">
+          <i data-lucide="users" class="w-5 h-5" style="color: var(--text-primary);"></i>
+          <span>Create Group Chat</span>
+        </h3>
+        <button id="btn-close-group" type="button" class="p-1.5 rounded-full hover:bg-black/10" style="color: var(--text-secondary);">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+      <form id="form-create-group" class="p-5 space-y-3.5" novalidate>
+        <div>
+          <label for="input-group-name" class="block text-xs font-medium mb-1" style="color: var(--text-secondary);">Group Name</label>
+          <input id="input-group-name" type="text" maxlength="40" placeholder="e.g. Weekend Squad" class="w-full px-3 py-2 rounded-lg text-sm border outline-none" style="background-color: var(--bg-input); border-color: var(--border-color); color: var(--text-primary);" required />
+        </div>
+        <div>
+          <label for="input-group-emails" class="block text-xs font-medium mb-1" style="color: var(--text-secondary);">Member Email IDs (comma-separated)</label>
+          <textarea id="input-group-emails" rows="3" placeholder="e.g. friend1@example.com, friend2@example.com" class="w-full px-3 py-2 rounded-lg text-sm border outline-none resize-none" style="background-color: var(--bg-input); border-color: var(--border-color); color: var(--text-primary);" required></textarea>
+          <p class="text-[11px] mt-1" style="color: var(--text-secondary);">Members must have a PulseChat account so they can receive messages in real time.</p>
+        </div>
+        <p id="group-error-msg" class="hidden text-xs text-rose-500"></p>
+        <div class="flex justify-end gap-2 pt-1">
+          <button id="btn-cancel-group" type="button" class="px-4 py-2 rounded-lg text-xs font-medium hover:bg-black/5 dark:hover:bg-white/10" style="color: var(--text-secondary);">Cancel</button>
+          <button type="submit" class="px-4 py-2 rounded-lg text-xs font-semibold text-white" style="background-color: var(--accent);">Create Group</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Image Lightbox Modal -->
+  <div id="modal-lightbox" class="hidden fixed inset-0 z-50 bg-black/85 flex items-center justify-center p-4">
+    <button id="btn-close-lightbox" type="button" class="absolute top-4 right-4 p-2 rounded-full bg-white/10 text-white hover:bg-white/20">
+      <i data-lucide="x" class="w-6 h-6"></i>
+    </button>
+    <img id="lightbox-img" src="" alt="Preview" class="max-w-full max-h-[88dvh] rounded-lg shadow-2xl object-contain" />
+  </div>
+
+  <!-- Toast Notification -->
+  <div id="toast" class="hidden fixed bottom-20 left-1/2 -translate-x-1/2 z-50 px-4 py-2 rounded-full text-xs font-medium text-white bg-slate-900/90 shadow-lg transition-opacity"></div>
+
+  <script>
+    (function () {
+      'use strict';
+
+      // ---------- Firebase Configuration ----------
+      const firebaseConfig = {
+        apiKey: "AIzaSyBGCTI3q0UVzCk_1__K891iboBuAE-zkO4",
+        authDomain: "ultronschat.firebaseapp.com",
+        projectId: "ultronschat",
+        storageBucket: "ultronschat.firebasestorage.app",
+        messagingSenderId: "891817339874",
+        appId: "1:891817339874:web:4586add629fbc54349e7bb",
+        measurementId: "G-0JRLWN43L0"
+      };
+
+      let fbAuth = null;
+      let fbDb = null;
+      let fbEnabled = false;
+      const fbUnsubscribers = {};
+
+      try {
+        if (typeof window.firebase !== 'undefined') {
+          if (!firebase.apps.length) {
+            firebase.initializeApp(firebaseConfig);
+          }
+          fbAuth = firebase.auth();
+          fbDb = firebase.firestore();
+          fbEnabled = true;
+        }
+      } catch (_) {
+        fbEnabled = false;
+      }
+
+      // ---------- Safe Storage ----------
+      const STORAGE_KEY = 'pulsechat_state_v1';
+      function loadState() {
+        try {
+          const raw = localStorage.getItem(STORAGE_KEY);
+          if (raw) return JSON.parse(raw);
+        } catch (_) {}
+        return null;
+      }
+      function saveState() {
+        try {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify({
+            account: state.account,
+            accounts: state.accounts,
+            accountPromptDismissed: state.accountPromptDismissed,
+            myName: state.myName,
+            myPeerId: state.myPeerId,
+            darkMode: state.darkMode,
+            soundEnabled: state.soundEnabled,
+            activeChatId: state.activeChatId,
+            chats: state.chats
+          }));
+        } catch (_) {}
+      }
+
+      function makeShortId() {
+        const chars = 'abcdefghjkmnpqrstuvwxyz23456789';
+        let out = 'pulse-';
+        for (let i = 0; i < 6; i++) out += chars[Math.floor(Math.random() * chars.length)];
+        return out;
+      }
+
+      const saved = loadState();
+      const defaultDemoChat = {
+        id: 'demo-friend',
+        name: 'Demo Friend (Try Me)',
+        type: 'demo',
+        color: '#6366f1',
+        status: 'online',
+        unread: 0,
+        messages: [
+          {
+            id: 'm-init-1',
+            sender: 'them',
+            text: 'Hey! Welcome to PulseChat. Since your friend cannot use WhatsApp, you can chat right here over the internet.',
+            time: Date.now() - 120000,
+            status: 'read'
+          },
+          {
+            id: 'm-init-2',
+            sender: 'them',
+            text: 'Click "Connect with a Friend via Internet" on the left to share your Chat ID or paste theirs. You can also test messaging, emojis, replies, and file sharing right here!',
+            time: Date.now() - 60000,
+            status: 'read'
+          }
+        ]
+      };
+
+      const state = {
+        account: (saved && saved.account) || null,
+        accounts: (saved && Array.isArray(saved.accounts)) ? saved.accounts : [],
+        accountPromptDismissed: saved ? Boolean(saved.accountPromptDismissed) : false,
+        myName: (saved && saved.myName) || 'You',
+        myPeerId: (saved && saved.myPeerId) || makeShortId(),
+        darkMode: saved ? Boolean(saved.darkMode) : true,
+        soundEnabled: saved ? Boolean(saved.soundEnabled) : true,
+        activeChatId: (saved && saved.activeChatId) || 'demo-friend',
+        chats: (saved && Array.isArray(saved.chats) && saved.chats.length > 0) ? saved.chats : [defaultDemoChat],
+        searchQuery: '',
+        inChatSearchQuery: '',
+        replyTo: null,
+        peer: null,
+        peerReady: false,
+        connections: {}, // peerId -> DataConnection or RTCDataChannel
+        manualPc: null,
+        manualDc: null,
+        mediaRecorder: null,
+        recordingChunks: [],
+        isRecording: false,
+        typingTimers: {}
+      };
+
+      // Ensure demo chat exists if list was empty
+      if (!state.chats.find(c => c.id === state.activeChatId)) {
+        state.activeChatId = state.chats[0].id;
+      }
+
+      // ---------- DOM Elements ----------
+      const el = {
+        sidebar: document.getElementById('sidebar'),
+        chatPane: document.getElementById('chat-pane'),
+        emptyState: document.getElementById('empty-state'),
+        activeChatContainer: document.getElementById('active-chat-container'),
+        myAvatarText: document.getElementById('my-avatar-text'),
+        myNameLabel: document.getElementById('my-name-label'),
+        myPeerId: document.getElementById('my-peer-id'),
+        networkDot: document.getElementById('network-dot'),
+        chatList: document.getElementById('chat-list'),
+        chatSearchInput: document.getElementById('chat-search-input'),
+        btnClearSearch: document.getElementById('btn-clear-search'),
+        activeAvatar: document.getElementById('active-avatar'),
+        activeChatName: document.getElementById('active-chat-name'),
+        activeChatStatus: document.getElementById('active-chat-status'),
+        activeE2eBadge: document.getElementById('active-e2e-badge'),
+        btnReconnectPeer: document.getElementById('btn-reconnect-peer'),
+        messagesFeed: document.getElementById('messages-feed'),
+        typingIndicator: document.getElementById('typing-indicator'),
+        messageInput: document.getElementById('message-input'),
+        btnSend: document.getElementById('btn-send'),
+        btnVoice: document.getElementById('btn-voice'),
+        btnAttach: document.getElementById('btn-attach'),
+        fileInput: document.getElementById('file-input'),
+        emojiPicker: document.getElementById('emoji-picker'),
+        emojiGrid: document.getElementById('emoji-grid'),
+        replyBanner: document.getElementById('reply-banner'),
+        replyBannerSender: document.getElementById('reply-banner-sender'),
+        replyBannerText: document.getElementById('reply-banner-text'),
+        inChatSearchBar: document.getElementById('in-chat-search-bar'),
+        inChatSearchInput: document.getElementById('in-chat-search-input'),
+        inChatSearchCount: document.getElementById('in-chat-search-count'),
+        modalConnect: document.getElementById('modal-connect'),
+        modalMyId: document.getElementById('modal-my-id'),
+        inputFriendName: document.getElementById('input-friend-name'),
+        inputFriendId: document.getElementById('input-friend-id'),
+        connectStatusMsg: document.getElementById('connect-status-msg'),
+        tabModePeerjs: document.getElementById('tab-mode-peerjs'),
+        tabModeManual: document.getElementById('tab-mode-manual'),
+        panelModePeerjs: document.getElementById('panel-mode-peerjs'),
+        panelModeManual: document.getElementById('panel-mode-manual'),
+        manualCodeBox: document.getElementById('manual-code-box'),
+        manualStatusMsg: document.getElementById('manual-status-msg'),
+        btnManualCopyCode: document.getElementById('btn-manual-copy-code'),
+        modalAccount: document.getElementById('modal-account'),
+        tabAcctSignup: document.getElementById('tab-acct-signup'),
+        tabAcctLogin: document.getElementById('tab-acct-login'),
+        tabAcctSync: document.getElementById('tab-acct-sync'),
+        formCreateAccount: document.getElementById('form-create-account'),
+        formLoginAccount: document.getElementById('form-login-account'),
+        panelAcctSync: document.getElementById('panel-acct-sync'),
+        loginEmail: document.getElementById('login-email'),
+        loginPassword: document.getElementById('login-password'),
+        loginErrorMsg: document.getElementById('login-error-msg'),
+        syncCodeInput: document.getElementById('sync-code-input'),
+        syncErrorMsg: document.getElementById('sync-error-msg'),
+        profileSyncRow: document.getElementById('profile-sync-row'),
+        btnLogoutAccount: document.getElementById('btn-logout-account'),
+        acctFullname: document.getElementById('acct-fullname'),
+        acctUsername: document.getElementById('acct-username'),
+        acctEmail: document.getElementById('acct-email'),
+        acctPassword: document.getElementById('acct-password'),
+        acctErrorMsg: document.getElementById('acct-error-msg'),
+        btnToggleAcctPw: document.getElementById('btn-toggle-acct-pw'),
+        modalProfile: document.getElementById('modal-profile'),
+        profileAccountBadge: document.getElementById('profile-account-badge'),
+        profileAcctUsername: document.getElementById('profile-acct-username'),
+        profileAcctEmail: document.getElementById('profile-acct-email'),
+        inputMyName: document.getElementById('input-my-name'),
+        modalInfo: document.getElementById('modal-info'),
+        infoContactName: document.getElementById('info-contact-name'),
+        infoContactId: document.getElementById('info-contact-id'),
+        infoContactStatus: document.getElementById('info-contact-status'),
+        modalLightbox: document.getElementById('modal-lightbox'),
+        lightboxImg: document.getElementById('lightbox-img'),
+        btnScrollBottom: document.getElementById('btn-scroll-bottom'),
+        voiceTimer: document.getElementById('voice-timer'),
+        voiceTimerText: document.getElementById('voice-timer-text'),
+        modalGroup: document.getElementById('modal-group'),
+        formCreateGroup: document.getElementById('form-create-group'),
+        inputGroupName: document.getElementById('input-group-name'),
+        inputGroupEmails: document.getElementById('input-group-emails'),
+        groupErrorMsg: document.getElementById('group-error-msg'),
+        toast: document.getElementById('toast'),
+        btnThemeToggle: document.getElementById('btn-theme-toggle'),
+        btnSoundToggle: document.getElementById('btn-sound-toggle')
+      };
+
+      // ---------- Helpers ----------
+      function initials(name) {
+        const parts = (name || 'U').trim().split(/\s+/);
+        if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
+        return (parts[0].slice(0, 2) || 'U').toUpperCase();
+      }
+
+      function pickColor(str) {
+        const colors = ['#00a884', '#6366f1', '#ec4899', '#f59e0b', '#0ea5e9', '#8b5cf6', '#10b981'];
+        let h = 0;
+        for (let i = 0; i < str.length; i++) h = (h * 31 + str.charCodeAt(i)) % colors.length;
+        return colors[Math.abs(h)];
+      }
+
+      function formatTime(ts) {
+        const d = new Date(ts);
+        return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      }
+
+      function formatDateLabel(ts) {
+        const d = new Date(ts);
+        const now = new Date();
+        const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+        const msgDay = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+        if (msgDay === today) return 'Today';
+        if (msgDay === today - 86400000) return 'Yesterday';
+        return d.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' });
+      }
+
+      function updatePageTitle() {
+        const totalUnread = state.chats.reduce((acc, c) => acc + (c.unread || 0), 0);
+        document.title = totalUnread > 0 ? `(${totalUnread}) PulseChat — Web Messenger` : 'PulseChat — Peer-to-Peer Web Messenger';
+      }
+
+      function escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text || '';
+        return div.innerHTML;
+      }
+
+      let toastTimer = null;
+      function showToast(msg) {
+        el.toast.textContent = msg;
+        el.toast.classList.remove('hidden');
+        clearTimeout(toastTimer);
+        toastTimer = setTimeout(() => el.toast.classList.add('hidden'), 2600);
+      }
+
+      function copyText(text) {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(text).then(() => showToast('Copied to clipboard')).catch(() => fallbackCopy(text));
+        } else {
+          fallbackCopy(text);
+        }
+      }
+      function fallbackCopy(text) {
+        const ta = document.createElement('textarea');
+        ta.value = text;
+        ta.style.position = 'fixed';
+        ta.style.opacity = '0';
+        document.body.appendChild(ta);
+        ta.select();
+        try { document.execCommand('copy'); showToast('Copied to clipboard'); } catch (_) { showToast('Copy failed'); }
+        document.body.removeChild(ta);
+      }
+
+      function playChime() {
+        if (!state.soundEnabled) return;
+        try {
+          const AudioCtx = window.AudioContext || window.webkitAudioContext;
+          if (!AudioCtx) return;
+          const ctx = new AudioCtx();
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(660, ctx.currentTime);
+          osc.frequency.exponentialRampToValueAtTime(880, ctx.currentTime + 0.08);
+          gain.gain.setValueAtTime(0.06, ctx.currentTime);
+          gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.18);
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          osc.start();
+          osc.stop(ctx.currentTime + 0.19);
+        } catch (_) {}
+      }
+
+      function applyTheme() {
+        if (state.darkMode) {
+          document.documentElement.classList.add('dark');
+          el.btnThemeToggle.innerHTML = '<i data-lucide="sun" class="w-5 h-5"></i>';
+        } else {
+          document.documentElement.classList.remove('dark');
+          el.btnThemeToggle.innerHTML = '<i data-lucide="moon" class="w-5 h-5"></i>';
+        }
+        el.btnSoundToggle.innerHTML = state.soundEnabled
+          ? '<i data-lucide="volume-2" class="w-5 h-5"></i>'
+          : '<i data-lucide="volume-x" class="w-5 h-5"></i>';
+        if (window.lucide) lucide.createIcons();
+      }
+
+      // ---------- Rendering ----------
+      function getActiveChat() {
+        return state.chats.find(c => c.id === state.activeChatId) || null;
+      }
+
+      function renderProfile() {
+        el.myNameLabel.textContent = state.account ? `${state.myName} (@${state.account.username})` : state.myName;
+        el.myAvatarText.textContent = initials(state.myName);
+        el.myPeerId.textContent = state.myPeerId;
+        el.modalMyId.textContent = state.myPeerId;
+        if (state.account) {
+          el.profileAccountBadge.classList.remove('hidden');
+          el.profileSyncRow.classList.remove('hidden');
+          el.btnLogoutAccount.classList.remove('hidden');
+          el.profileAcctUsername.textContent = '@' + state.account.username;
+          el.profileAcctEmail.textContent = state.account.email;
+        } else {
+          el.profileAccountBadge.classList.add('hidden');
+          el.profileSyncRow.classList.add('hidden');
+          el.btnLogoutAccount.classList.add('hidden');
+        }
+      }
+
+      function renderChatList() {
+        const q = state.searchQuery.trim().toLowerCase();
+        const filtered = state.chats.filter(c => {
+          if (!q) return true;
+          if (c.name.toLowerCase().includes(q)) return true;
+          return c.messages.some(m => (m.text || '').toLowerCase().includes(q));
+        });
+
+        el.chatList.innerHTML = '';
+        if (filtered.length === 0) {
+          el.chatList.innerHTML = '<div class="p-8 text-center text-xs" style="color: var(--text-secondary);">No matching chats found.</div>';
+          return;
+        }
+
+        filtered.forEach(chat => {
+          const last = chat.messages[chat.messages.length - 1];
+          const isSelected = chat.id === state.activeChatId;
+          const preview = last
+            ? (last.attachment ? (last.attachment.type.startsWith('image/') ? '📷 Photo' : last.attachment.type.startsWith('audio/') ? '🎤 Voice note' : '📎 ' + last.attachment.name) : last.text)
+            : 'No messages yet';
+
+          const row = document.createElement('button');
+          row.type = 'button';
+          row.className = 'w-full px-3.5 py-3 flex items-center gap-3 text-left transition-colors';
+          row.style.backgroundColor = isSelected ? 'var(--bg-active)' : 'transparent';
+          row.onmouseenter = () => { if (!isSelected) row.style.backgroundColor = 'var(--bg-hover)'; };
+          row.onmouseleave = () => { if (!isSelected) row.style.backgroundColor = 'transparent'; };
+
+          const statusDot = chat.status === 'online'
+            ? '<span class="w-2.5 h-2.5 rounded-full bg-emerald-500 border-2 border-white dark:border-slate-900 absolute bottom-0 right-0"></span>'
+            : '';
+
+          row.innerHTML = `
+            <div class="relative w-11 h-11 rounded-full flex items-center justify-center font-semibold text-white text-sm flex-shrink-0" style="background-color: ${chat.color || '#00a884'};">
+              ${escapeHtml(initials(chat.name))}
+              ${statusDot}
+            </div>
+            <div class="flex-1 min-w-0">
+              <div class="flex items-center justify-between gap-2 mb-0.5">
+                <span class="font-medium text-sm truncate">${escapeHtml(chat.name)}</span>
+                <span class="text-[11px] flex-shrink-0" style="color: ${chat.unread > 0 ? 'var(--accent)' : 'var(--text-secondary)'};">
+                  ${last ? formatTime(last.time) : ''}
+                </span>
+              </div>
+              <div class="flex items-center justify-between gap-2">
+                <span class="text-xs truncate" style="color: var(--text-secondary);">
+                  ${last && last.sender === 'me' ? 'You: ' : ''}${escapeHtml(preview)}
+                </span>
+                ${chat.unread > 0 ? `<span class="px-1.5 py-0.5 min-w-[20px] text-center rounded-full text-[11px] font-semibold text-white" style="background-color: var(--accent);">${chat.unread}</span>` : ''}
+              </div>
+            </div>
+          `;
+
+          row.addEventListener('click', () => selectChat(chat.id));
+          el.chatList.appendChild(row);
+        });
+        updatePageTitle();
+      }
+
+      function renderActiveChat() {
+        const chat = getActiveChat();
+        if (!chat) {
+          el.emptyState.classList.remove('hidden');
+          el.activeChatContainer.classList.add('hidden');
+          return;
+        }
+        el.emptyState.classList.add('hidden');
+        el.activeChatContainer.classList.remove('hidden');
+
+        el.activeAvatar.textContent = initials(chat.name);
+        el.activeAvatar.style.backgroundColor = chat.color || '#00a884';
+        el.activeChatName.textContent = chat.name;
+        if (chat.type === 'group') {
+          const count = (chat.participants && chat.participants.length) || 2;
+          el.activeChatStatus.textContent = `Group · ${count} members`;
+        } else if (chat.type === 'cloud') {
+          el.activeChatStatus.textContent = 'Cloud Synced · Encrypted in transit';
+        } else {
+          el.activeChatStatus.textContent = chat.status === 'online' ? 'online' : (chat.type === 'peer' ? 'offline · click refresh to reconnect' : 'offline');
+        }
+
+        if (chat.type === 'peer' || chat.type === 'manual') {
+          el.activeE2eBadge.innerHTML = '<i data-lucide="lock" class="w-2.5 h-2.5"></i> P2P';
+          el.activeE2eBadge.classList.remove('hidden');
+        } else if (chat.type === 'cloud' || chat.type === 'group') {
+          el.activeE2eBadge.innerHTML = '<i data-lucide="cloud" class="w-2.5 h-2.5"></i> Cloud';
+          el.activeE2eBadge.classList.remove('hidden');
+        } else {
+          el.activeE2eBadge.classList.add('hidden');
+        }
+
+        if (chat.type === 'peer' && chat.status !== 'online') {
+          el.btnReconnectPeer.classList.remove('hidden');
+        } else {
+          el.btnReconnectPeer.classList.add('hidden');
+        }
+
+        renderMessages();
+      }
+
+      function renderMessages() {
+        const chat = getActiveChat();
+        if (!chat) return;
+
+        const q = state.inChatSearchQuery.trim().toLowerCase();
+        let list = chat.messages;
+        if (q) {
+          list = list.filter(m => (m.text || '').toLowerCase().includes(q));
+          el.inChatSearchCount.textContent = `${list.length} match${list.length === 1 ? '' : 'es'}`;
+        } else {
+          el.inChatSearchCount.textContent = '';
+        }
+
+        el.messagesFeed.innerHTML = '';
+        if (list.length === 0) {
+          el.messagesFeed.innerHTML = `<div class="h-full flex items-center justify-center"><span class="px-3 py-1.5 rounded-lg text-xs shadow-xs" style="background-color: var(--bg-header); color: var(--text-secondary);">${q ? 'No matching messages.' : 'Messages are end-to-end encrypted in P2P mode. Say hi!'}</span></div>`;
+          return;
+        }
+
+        let lastDateLabel = '';
+        list.forEach(msg => {
+          const dateLabel = formatDateLabel(msg.time);
+          if (dateLabel !== lastDateLabel) {
+            lastDateLabel = dateLabel;
+            const sep = document.createElement('div');
+            sep.className = 'flex justify-center my-2';
+            sep.innerHTML = `<span class="px-3 py-1 rounded-full text-[11px] font-medium shadow-xs" style="background-color: var(--bg-header); color: var(--text-secondary);">${escapeHtml(dateLabel)}</span>`;
+            el.messagesFeed.appendChild(sep);
+          }
+
+          const isMe = msg.sender === 'me';
+          const wrap = document.createElement('div');
+          wrap.className = `flex ${isMe ? 'justify-end' : 'justify-start'} group`;
+
+          const bubble = document.createElement('div');
+          bubble.className = `relative max-w-[82%] sm:max-w-[68%] px-3 py-2 shadow-xs text-sm break-words ${isMe ? 'msg-bubble-out' : 'msg-bubble-in'}`;
+
+          let replyHtml = '';
+          if (msg.replyTo) {
+            replyHtml = `
+              <div class="mb-1.5 pl-2.5 py-1 pr-2 rounded bg-black/5 dark:bg-black/20 border-l-4 text-xs" style="border-color: var(--accent);">
+                <div class="font-semibold" style="color: var(--accent);">${escapeHtml(msg.replyTo.senderName)}</div>
+                <div class="truncate opacity-80">${escapeHtml(msg.replyTo.text)}</div>
+              </div>
+            `;
+          }
+
+          let attachHtml = '';
+          if (msg.attachment) {
+            if (msg.attachment.type.startsWith('image/')) {
+              attachHtml = `<img src="${msg.attachment.data}" alt="${escapeHtml(msg.attachment.name)}" class="max-w-full max-h-64 rounded-lg mb-1.5 cursor-pointer object-cover" data-lightbox="${msg.attachment.data}" />`;
+            } else if (msg.attachment.type.startsWith('audio/')) {
+              attachHtml = `<audio controls src="${msg.attachment.data}" class="max-w-[230px] h-9 mb-1"></audio>`;
+            } else {
+              attachHtml = `
+                <a href="${msg.attachment.data}" download="${escapeHtml(msg.attachment.name)}" class="flex items-center gap-2 p-2 rounded-lg mb-1.5 bg-black/5 dark:bg-black/20 hover:underline text-xs">
+                  <i data-lucide="file-text" class="w-4 h-4 flex-shrink-0"></i>
+                  <span class="truncate">${escapeHtml(msg.attachment.name)}</span>
+                </a>
+              `;
+            }
+          }
+
+          const ticks = isMe
+            ? (msg.status === 'read'
+                ? '<span class="ml-1 text-[11px] font-bold" style="color: var(--tick-read);">✓✓</span>'
+                : msg.status === 'delivered'
+                  ? '<span class="ml-1 text-[11px]" style="color: var(--text-secondary);">✓✓</span>'
+                  : '<span class="ml-1 text-[11px]" style="color: var(--text-secondary);">✓</span>')
+            : '';
+
+          const reactHtml = msg.reaction
+            ? `<span class="absolute -bottom-2.5 ${isMe ? 'left-2' : 'right-2'} px-1.5 py-0.2 rounded-full text-xs shadow border" style="background-color: var(--bg-sidebar); border-color: var(--border-color);">${escapeHtml(msg.reaction)}</span>`
+            : '';
+
+          const groupSenderHtml = (!isMe && chat.type === 'group' && msg.senderName)
+            ? `<div class="text-[11px] font-semibold mb-0.5" style="color: #60a5fa;">${escapeHtml(msg.senderName)}</div>`
+            : '';
+
+          const editedTag = msg.edited ? '<span class="italic opacity-75 mr-1">edited</span>' : '';
+
+          bubble.innerHTML = `
+            ${groupSenderHtml}
+            ${replyHtml}
+            ${attachHtml}
+            ${msg.text ? `<div class="whitespace-pre-wrap leading-relaxed">${escapeHtml(msg.text)}</div>` : ''}
+            <div class="flex items-center justify-end gap-1 mt-1 text-[10px]" style="color: var(--text-secondary);">
+              ${editedTag}
+              <span>${formatTime(msg.time)}</span>
+              ${ticks}
+            </div>
+            ${reactHtml}
+            <div class="hidden group-hover:flex items-center gap-1 absolute -top-7 ${isMe ? 'right-0' : 'left-0'} z-20 px-2 py-1 rounded-full shadow-lg border" style="background-color: var(--bg-sidebar); border-color: var(--border-color);">
+              <button type="button" class="text-xs hover:scale-125 transition-transform" data-react-id="${msg.id}" data-emoji="👍" title="Like">👍</button>
+              <button type="button" class="text-xs hover:scale-125 transition-transform" data-react-id="${msg.id}" data-emoji="❤️" title="Love">❤️</button>
+              <button type="button" class="text-xs hover:scale-125 transition-transform" data-react-id="${msg.id}" data-emoji="😂" title="Haha">😂</button>
+              <button type="button" class="text-xs hover:scale-125 transition-transform" data-react-id="${msg.id}" data-emoji="😮" title="Wow">😮</button>
+              <span class="w-px h-3 mx-0.5" style="background-color: var(--border-color);"></span>
+              <button type="button" class="text-xs hover:scale-110 transition-transform" data-reply-id="${msg.id}" title="Reply">↩</button>
+              ${msg.text ? `<button type="button" class="text-xs hover:scale-110 transition-transform" data-copy-id="${msg.id}" title="Copy text">📋</button>` : ''}
+              ${isMe && msg.text ? `<button type="button" class="text-xs hover:scale-110 transition-transform" data-edit-id="${msg.id}" title="Edit">✏️</button>` : ''}
+              <button type="button" class="text-xs hover:scale-110 transition-transform text-rose-400" data-delete-id="${msg.id}" title="Delete">🗑️</button>
+            </div>
+          `;
+
+          wrap.appendChild(bubble);
+          el.messagesFeed.appendChild(wrap);
+        });
+
+        if (window.lucide) lucide.createIcons();
+        el.messagesFeed.scrollTop = el.messagesFeed.scrollHeight;
+      }
+
+      function selectChat(chatId) {
+        state.activeChatId = chatId;
+        const chat = getActiveChat();
+        if (chat) chat.unread = 0;
+
+        // Mobile view switch
+        if (window.innerWidth < 768) {
+          el.sidebar.classList.add('hidden');
+          el.chatPane.classList.remove('hidden');
+          el.chatPane.classList.add('flex');
+        }
+
+        saveState();
+        renderChatList();
+        renderActiveChat();
+      }
+
+      // ---------- Messaging & Demo Bot ----------
+      function addMessageToChat(chatId, msgObj) {
+        let chat = state.chats.find(c => c.id === chatId);
+        if (!chat) return;
+        chat.messages.push(msgObj);
+        if (state.activeChatId !== chatId && msgObj.sender === 'them') {
+          chat.unread = (chat.unread || 0) + 1;
+        }
+        // Move chat to top
+        state.chats = [chat, ...state.chats.filter(c => c.id !== chatId)];
+        saveState();
+        renderChatList();
+        if (state.activeChatId === chatId) {
+          renderMessages();
+        }
+      }
+
+      function sendCurrentMessage(attachment) {
+        const chat = getActiveChat();
+        if (!chat) return;
+        const text = el.messageInput.value.trim();
+        if (!text && !attachment) return;
+
+        const msgId = 'm-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6);
+        const payload = {
+          id: msgId,
+          sender: 'me',
+          text: text,
+          attachment: attachment || null,
+          replyTo: state.replyTo ? { ...state.replyTo } : null,
+          time: Date.now(),
+          status: 'sent'
+        };
+
+        el.messageInput.value = '';
+        el.messageInput.style.height = 'auto';
+        updateSendVoiceButtons();
+        clearReply();
+
+        addMessageToChat(chat.id, payload);
+
+        if (chat.type === 'demo') {
+          simulateDemoReply(chat.id, payload);
+        } else if ((chat.type === 'cloud' || chat.type === 'group') && fbEnabled && fbDb && state.account && state.account.uid) {
+          if (payload.attachment && payload.attachment.data && payload.attachment.data.length > 750000) {
+            showToast('Cloud attachments must be under 500 KB (use P2P Chat ID for larger files)');
+            return;
+          }
+          try {
+            fbDb.collection('chats').doc(chat.roomId).set({
+              roomId: chat.roomId,
+              type: chat.type,
+              name: chat.name,
+              participants: chat.participants || [state.account.uid],
+              participantNames: chat.participantNames || {},
+              updatedAt: Date.now()
+            }, { merge: true }).catch(() => {});
+
+            fbDb.collection('chats').doc(chat.roomId).collection('messages').doc(msgId).set({
+              id: msgId,
+              senderUid: state.account.uid,
+              senderName: state.myName,
+              text: payload.text || '',
+              attachment: payload.attachment || null,
+              replyTo: payload.replyTo || null,
+              time: payload.time
+            }).then(() => {
+              payload.status = 'delivered';
+              saveState();
+              if (state.activeChatId === chat.id) renderMessages();
+            }).catch(() => {
+              showToast('Cloud send failed — check Firestore rules');
+            });
+          } catch (_) {
+            showToast('Cloud send unavailable');
+          }
+        } else if (chat.type === 'peer' || chat.type === 'manual') {
+          const conn = state.connections[chat.id];
+          if (conn && (conn.open || conn.readyState === 'open')) {
+            try {
+              const wire = JSON.stringify({
+                kind: 'chat',
+                id: msgId,
+                senderName: state.myName,
+                text: payload.text,
+                attachment: payload.attachment,
+                replyTo: payload.replyTo,
+                time: payload.time
+              });
+              conn.send(conn.readyState === 'open' ? wire : JSON.parse(wire));
+              payload.status = 'delivered';
+              saveState();
+              renderMessages();
+            } catch (_) {
+              showToast('Could not send—peer disconnected');
+            }
+          } else {
+            showToast('Friend is offline right now. Reconnect to send live.');
+          }
+        }
+      }
+
+      function simulateDemoReply(chatId, sentMsg) {
+        setTimeout(() => {
+          sentMsg.status = 'read';
+          if (state.activeChatId === chatId) {
+            renderMessages();
+            el.typingIndicator.classList.remove('hidden');
+            el.messagesFeed.scrollTop = el.messagesFeed.scrollHeight;
+          }
+        }, 450);
+
+        setTimeout(() => {
+          el.typingIndicator.classList.add('hidden');
+          const lower = (sentMsg.text || '').toLowerCase();
+          let replyText = 'Got it! 👍 When you are ready to chat with your real friend, click "Connect with a Friend via Internet" and share your Chat ID.';
+          if (sentMsg.attachment) {
+            replyText = 'Nice! Your attachment came through cleanly.';
+          } else if (lower.includes('hi') || lower.includes('hello') || lower.includes('hey')) {
+            replyText = 'Hey there! Everything is working smoothly. Share your Chat ID in the left sidebar with your friend to connect over the internet!';
+          } else if (lower.includes('?')) {
+            replyText = 'Good question! Once both of you open this page and connect via Chat ID, messages go directly browser-to-browser.';
+          }
+          addMessageToChat(chatId, {
+            id: 'm-' + Date.now(),
+            sender: 'them',
+            text: replyText,
+            time: Date.now(),
+            status: 'read'
+          });
+          playChime();
+        }, 1250);
+      }
+
+      // ---------- PeerJS Internet P2P ----------
+      function initPeerJS() {
+        if (typeof window.Peer === 'undefined') {
+          el.networkDot.className = 'w-2.5 h-2.5 rounded-full bg-rose-500 flex-shrink-0';
+          el.networkDot.title = 'P2P library unavailable (use Manual Code tab)';
+          return;
+        }
+        try {
+          const peer = new window.Peer(state.myPeerId, { debug: 0 });
+          state.peer = peer;
+
+          peer.on('open', (id) => {
+            state.myPeerId = id;
+            state.peerReady = true;
+            el.networkDot.className = 'w-2.5 h-2.5 rounded-full bg-emerald-500 flex-shrink-0';
+            el.networkDot.title = 'Online on P2P network';
+            renderProfile();
+            saveState();
+          });
+
+          peer.on('connection', (conn) => {
+            attachPeerConnection(conn, null);
+            showToast('A friend connected!');
+          });
+
+          peer.on('error', (err) => {
+            if (err && err.type === 'unavailable-id') {
+              state.myPeerId = makeShortId();
+              saveState();
+              initPeerJS();
+              return;
+            }
+            el.networkDot.className = 'w-2.5 h-2.5 rounded-full bg-amber-400 flex-shrink-0';
+            el.networkDot.title = 'P2P signaling unavailable — try Manual Code tab';
+          });
+        } catch (_) {
+          el.networkDot.className = 'w-2.5 h-2.5 rounded-full bg-amber-400 flex-shrink-0';
+        }
+      }
+
+      function attachPeerConnection(conn, friendlyName) {
+        const remoteId = conn.peer;
+        let chat = state.chats.find(c => c.id === remoteId);
+        if (!chat) {
+          chat = {
+            id: remoteId,
+            name: friendlyName || remoteId,
+            type: 'peer',
+            color: pickColor(remoteId),
+            status: 'online',
+            unread: 0,
+            messages: []
+          };
+          state.chats.unshift(chat);
+        } else {
+          if (friendlyName) chat.name = friendlyName;
+          chat.status = 'online';
+        }
+
+        state.connections[remoteId] = conn;
+
+        conn.on('open', () => {
+          chat.status = 'online';
+          try { conn.send({ kind: 'hello', name: state.myName }); } catch (_) {}
+          saveState();
+          renderChatList();
+          if (state.activeChatId === remoteId) renderActiveChat();
+        });
+
+        conn.on('data', (data) => {
+          handleIncomingWireData(remoteId, data, conn);
+        });
+
+        conn.on('close', () => {
+          chat.status = 'offline';
+          saveState();
+          renderChatList();
+          if (state.activeChatId === remoteId) renderActiveChat();
+        });
+      }
+
+      function handleIncomingWireData(chatId, raw, conn) {
+        let data = raw;
+        if (typeof raw === 'string') {
+          try { data = JSON.parse(raw); } catch (_) { return; }
+        }
+        if (!data || !data.kind) return;
+
+        const chat = state.chats.find(c => c.id === chatId);
+        if (!chat) return;
+
+        if (data.kind === 'hello' && data.name) {
+          if (chat.name === chat.id) chat.name = data.name;
+          saveState();
+          renderChatList();
+          if (state.activeChatId === chatId) renderActiveChat();
+        } else if (data.kind === 'typing') {
+          if (state.activeChatId === chatId) {
+            el.typingIndicator.classList.toggle('hidden', !data.isTyping);
+          }
+        } else if (data.kind === 'chat') {
+          if (data.senderName && chat.name === chat.id) chat.name = data.senderName;
+          addMessageToChat(chatId, {
+            id: data.id || ('m-' + Date.now()),
+            sender: 'them',
+            text: data.text || '',
+            attachment: data.attachment || null,
+            replyTo: data.replyTo || null,
+            time: data.time || Date.now(),
+            status: 'read'
+          });
+          playChime();
+          // Send read receipt
+          try {
+            const ack = { kind: 'ack', id: data.id };
+            conn.send(conn.readyState === 'open' ? JSON.stringify(ack) : ack);
+          } catch (_) {}
+        } else if (data.kind === 'ack' && data.id) {
+          const target = chat.messages.find(m => m.id === data.id);
+          if (target) {
+            target.status = 'read';
+            saveState();
+            if (state.activeChatId === chatId) renderMessages();
+          }
+        } else if (data.kind === 'react' && data.id) {
+          const target = chat.messages.find(m => m.id === data.id);
+          if (target) {
+            target.reaction = data.reaction;
+            saveState();
+            if (state.activeChatId === chatId) renderMessages();
+          }
+        }
+      }
+
+      function connectToPeerId(remoteId, friendName) {
+        if (!remoteId) return;
+        if (remoteId === state.myPeerId) {
+          showToast('That is your own Chat ID!');
+          return;
+        }
+        if (!state.peer || !state.peerReady) {
+          showToast('Still connecting to P2P network—try again or use Manual Code.');
+          return;
+        }
+        const conn = state.peer.connect(remoteId, { reliable: true });
+        attachPeerConnection(conn, friendName);
+        selectChat(remoteId);
+        closeConnectModal();
+        showToast('Connecting to ' + (friendName || remoteId) + '...');
+      }
+
+      // ---------- Manual WebRTC Fallback ----------
+      function setupManualDataChannel(dc) {
+        state.manualDc = dc;
+        const chatId = 'manual-direct';
+        let chat = state.chats.find(c => c.id === chatId);
+        if (!chat) {
+          chat = {
+            id: chatId,
+            name: 'Direct WebRTC Friend',
+            type: 'manual',
+            color: '#0ea5e9',
+            status: 'online',
+            unread: 0,
+            messages: []
+          };
+          state.chats.unshift(chat);
+        }
+        state.connections[chatId] = dc;
+
+        dc.onopen = () => {
+          chat.status = 'online';
+          saveState();
+          renderChatList();
+          selectChat(chatId);
+          closeConnectModal();
+          showToast('Direct WebRTC connected!');
+        };
+        dc.onmessage = (ev) => handleIncomingWireData(chatId, ev.data, dc);
+        dc.onclose = () => {
+          chat.status = 'offline';
+          saveState();
+          renderChatList();
+          if (state.activeChatId === chatId) renderActiveChat();
+        };
+      }
+
+      async function createManualOffer() {
+        try {
+          el.manualStatusMsg.textContent = 'Generating invite code...';
+          const pc = new RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] });
+          state.manualPc = pc;
+          const dc = pc.createDataChannel('pulsechat');
+          setupManualDataChannel(dc);
+
+          const offer = await pc.createOffer();
+          await pc.setLocalDescription(offer);
+
+          await new Promise(resolve => {
+            if (pc.iceGatheringState === 'complete') return resolve();
+            const timer = setTimeout(resolve, 2500);
+            pc.onicegatheringstatechange = () => {
+              if (pc.iceGatheringState === 'complete') { clearTimeout(timer); resolve(); }
+            };
+          });
+
+          el.manualCodeBox.value = btoa(unescape(encodeURIComponent(JSON.stringify(pc.localDescription))));
+          el.btnManualCopyCode.classList.remove('hidden');
+          el.manualStatusMsg.textContent = 'Send this Invite Code to your friend, then paste their Reply Code below and click Apply.';
+        } catch (err) {
+          el.manualStatusMsg.textContent = 'Could not create invite code: ' + (err.message || err);
+        }
+      }
+
+      async function applyManualCode() {
+        const raw = el.manualCodeBox.value.trim();
+        if (!raw) return;
+        try {
+          const desc = JSON.parse(decodeURIComponent(escape(atob(raw))));
+          if (desc.type === 'offer') {
+            el.manualStatusMsg.textContent = 'Creating reply code...';
+            const pc = new RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] });
+            state.manualPc = pc;
+            pc.ondatachannel = (ev) => setupManualDataChannel(ev.channel);
+            await pc.setRemoteDescription(desc);
+            const ans = await pc.createAnswer();
+            await pc.setLocalDescription(ans);
+
+            await new Promise(resolve => {
+              if (pc.iceGatheringState === 'complete') return resolve();
+              const timer = setTimeout(resolve, 2500);
+              pc.onicegatheringstatechange = () => {
+                if (pc.iceGatheringState === 'complete') { clearTimeout(timer); resolve(); }
+              };
+            });
+
+            el.manualCodeBox.value = btoa(unescape(encodeURIComponent(JSON.stringify(pc.localDescription))));
+            el.btnManualCopyCode.classList.remove('hidden');
+            el.manualStatusMsg.textContent = 'Copy this Reply Code and send it back to your friend!';
+          } else if (desc.type === 'answer' && state.manualPc) {
+            await state.manualPc.setRemoteDescription(desc);
+            el.manualStatusMsg.textContent = 'Connecting...';
+          } else {
+            el.manualStatusMsg.textContent = 'Invalid code or missing invite session.';
+          }
+        } catch (_) {
+          el.manualStatusMsg.textContent = 'Invalid code format. Make sure you copied the full code.';
+        }
+      }
+
+      // ---------- UI Helpers ----------
+      function updateSendVoiceButtons() {
+        const hasText = el.messageInput.value.trim().length > 0;
+        if (hasText) {
+          el.btnSend.classList.remove('hidden');
+          el.btnVoice.classList.add('hidden');
+        } else {
+          el.btnSend.classList.add('hidden');
+          el.btnVoice.classList.remove('hidden');
+        }
+      }
+
+      function clearReply() {
+        state.replyTo = null;
+        el.replyBanner.classList.add('hidden');
+      }
+
+      function openConnectModal() {
+        el.modalConnect.classList.remove('hidden');
+        el.connectStatusMsg.classList.add('hidden');
+        el.inputFriendId.value = '';
+        el.inputFriendName.value = '';
+      }
+      function closeConnectModal() {
+        el.modalConnect.classList.add('hidden');
+      }
+
+      // ---------- Emoji Grid ----------
+      const emojis = ['😀','😂','🥹','😍','🤩','😎','🥳','🤔','😅','😭','👍','👏','🙌','🔥','❤️','💯','🎉','✨','🙏','👀','🚀','☕','🍕','🎵','✅','❌','💬','📎'];
+      emojis.forEach(em => {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'p-1 rounded hover:bg-black/10 dark:hover:bg-white/10 transition-colors';
+        b.textContent = em;
+        b.addEventListener('click', () => {
+          el.messageInput.value += em;
+          updateSendVoiceButtons();
+          el.messageInput.focus();
+        });
+        el.emojiGrid.appendChild(b);
+      });
+
+      // ---------- Event Listeners ----------
+      el.btnThemeToggle.addEventListener('click', () => {
+        state.darkMode = !state.darkMode;
+        applyTheme();
+        saveState();
+      });
+
+      el.btnSoundToggle.addEventListener('click', () => {
+        state.soundEnabled = !state.soundEnabled;
+        applyTheme();
+        saveState();
+        showToast(state.soundEnabled ? 'Sound on' : 'Sound muted');
+      });
+
+      document.getElementById('btn-copy-id').addEventListener('click', () => copyText(state.myPeerId));
+      document.getElementById('btn-modal-copy-id').addEventListener('click', () => copyText(state.myPeerId));
+
+      document.getElementById('btn-new-chat').addEventListener('click', openConnectModal);
+      document.getElementById('btn-open-connect-banner').addEventListener('click', openConnectModal);
+      document.getElementById('btn-empty-connect').addEventListener('click', openConnectModal);
+      document.getElementById('btn-close-connect').addEventListener('click', closeConnectModal);
+      document.getElementById('btn-cancel-connect').addEventListener('click', closeConnectModal);
+
+      el.tabModePeerjs.addEventListener('click', () => {
+        el.panelModePeerjs.classList.remove('hidden');
+        el.panelModeManual.classList.add('hidden');
+        el.tabModePeerjs.style.borderColor = 'var(--accent)';
+        el.tabModePeerjs.style.color = 'var(--accent)';
+        el.tabModeManual.style.borderColor = 'transparent';
+        el.tabModeManual.style.color = 'var(--text-secondary)';
+      });
+
+      el.tabModeManual.addEventListener('click', () => {
+        el.panelModeManual.classList.remove('hidden');
+        el.panelModePeerjs.classList.add('hidden');
+        el.tabModeManual.style.borderColor = 'var(--accent)';
+        el.tabModeManual.style.color = 'var(--accent)';
+        el.tabModePeerjs.style.borderColor = 'transparent';
+        el.tabModePeerjs.style.color = 'var(--text-secondary)';
+      });
+
+      document.getElementById('btn-do-connect').addEventListener('click', () => {
+        const fid = el.inputFriendId.value.trim();
+        const fname = el.inputFriendName.value.trim();
+        if (!fid) {
+          el.connectStatusMsg.textContent = 'Please enter your friend’s Chat ID.';
+          el.connectStatusMsg.className = 'text-xs text-rose-500';
+          el.connectStatusMsg.classList.remove('hidden');
+          return;
+        }
+        connectToPeerId(fid, fname);
+      });
+
+      document.getElementById('btn-manual-create-offer').addEventListener('click', createManualOffer);
+      document.getElementById('btn-manual-accept').addEventListener('click', applyManualCode);
+      el.btnManualCopyCode.addEventListener('click', () => copyText(el.manualCodeBox.value));
+
+      // Account Creation Modal
+      function openAccountModal() {
+        el.acctErrorMsg.classList.add('hidden');
+        if (state.account) {
+          el.acctFullname.value = state.account.fullName || state.myName;
+          el.acctUsername.value = state.account.username || '';
+          el.acctEmail.value = state.account.email || '';
+        }
+        el.modalAccount.classList.remove('hidden');
+      }
+
+      document.getElementById('btn-close-account').addEventListener('click', () => {
+        state.accountPromptDismissed = true;
+        saveState();
+        el.modalAccount.classList.add('hidden');
+      });
+
+      document.getElementById('btn-skip-account').addEventListener('click', () => {
+        state.accountPromptDismissed = true;
+        saveState();
+        el.modalAccount.classList.add('hidden');
+      });
+
+      el.btnToggleAcctPw.addEventListener('click', () => {
+        const isPw = el.acctPassword.type === 'password';
+        el.acctPassword.type = isPw ? 'text' : 'password';
+        el.btnToggleAcctPw.innerHTML = isPw
+          ? '<i data-lucide="eye-off" class="w-4 h-4"></i>'
+          : '<i data-lucide="eye" class="w-4 h-4"></i>';
+        if (window.lucide) lucide.createIcons();
+      });
+
+      el.formCreateAccount.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const fullName = el.acctFullname.value.trim();
+        const username = el.acctUsername.value.trim().replace(/^@+/, '');
+        const email = el.acctEmail.value.trim();
+        const password = el.acctPassword.value;
+
+        if (!fullName || !username || !email || !password) {
+          el.acctErrorMsg.textContent = 'Please fill in all four fields.';
+          el.acctErrorMsg.classList.remove('hidden');
+          return;
+        }
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+          el.acctErrorMsg.textContent = 'Please enter a valid email address.';
+          el.acctErrorMsg.classList.remove('hidden');
+          return;
+        }
+        if (password.length < 4) {
+          el.acctErrorMsg.textContent = 'Password must be at least 4 characters.';
+          el.acctErrorMsg.classList.remove('hidden');
+          return;
+        }
+
+        if (fbEnabled && fbAuth && fbDb) {
+          try {
+            const cred = await fbAuth.createUserWithEmailAndPassword(email, password);
+            const uid = cred.user.uid;
+            await cred.user.updateProfile({ displayName: fullName });
+            const acctRecord = {
+              uid,
+              fullName,
+              username,
+              email: email.toLowerCase(),
+              peerId: state.myPeerId,
+              createdAt: Date.now()
+            };
+            await fbDb.collection('users').doc(uid).set(acctRecord, { merge: true });
+            state.account = acctRecord;
+            state.myName = fullName;
+            state.accountPromptDismissed = true;
+            saveState();
+            renderProfile();
+            el.modalAccount.classList.add('hidden');
+            showToast('Account created for @' + username + '!');
+            return;
+          } catch (err) {
+            el.acctErrorMsg.textContent = (err && err.message) ? err.message : 'Could not create account.';
+            el.acctErrorMsg.classList.remove('hidden');
+            return;
+          }
+        }
+
+        const acctRecord = {
+          fullName,
+          username,
+          email: email.toLowerCase(),
+          password,
+          peerId: state.myPeerId,
+          createdAt: Date.now()
+        };
+        state.accounts = [acctRecord, ...state.accounts.filter(a => a.email !== acctRecord.email)];
+        state.account = acctRecord;
+        state.myName = fullName;
+        state.accountPromptDismissed = true;
+        saveState();
+        renderProfile();
+        el.modalAccount.classList.add('hidden');
+        showToast('Account created for @' + username + '!');
+      });
+
+      function switchAccountTab(tab) {
+        const tabs = [
+          [el.tabAcctSignup, el.formCreateAccount, 'signup'],
+          [el.tabAcctLogin, el.formLoginAccount, 'login'],
+          [el.tabAcctSync, el.panelAcctSync, 'sync']
+        ];
+        tabs.forEach(([btn, panel, key]) => {
+          const active = key === tab;
+          panel.classList.toggle('hidden', !active);
+          btn.style.borderColor = active ? 'var(--text-primary)' : 'transparent';
+          btn.style.color = active ? 'var(--text-primary)' : 'var(--text-secondary)';
+        });
+        el.acctErrorMsg.classList.add('hidden');
+        el.loginErrorMsg.classList.add('hidden');
+        el.syncErrorMsg.classList.add('hidden');
+      }
+
+      el.tabAcctSignup.addEventListener('click', () => switchAccountTab('signup'));
+      el.tabAcctLogin.addEventListener('click', () => switchAccountTab('login'));
+      el.tabAcctSync.addEventListener('click', () => switchAccountTab('sync'));
+
+      el.formLoginAccount.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const email = el.loginEmail.value.trim().toLowerCase();
+        const password = el.loginPassword.value;
+        if (!email || !password) {
+          el.loginErrorMsg.textContent = 'Please enter both Email ID and Password.';
+          el.loginErrorMsg.classList.remove('hidden');
+          return;
+        }
+
+        if (fbEnabled && fbAuth && fbDb) {
+          try {
+            const cred = await fbAuth.signInWithEmailAndPassword(email, password);
+            const uid = cred.user.uid;
+            const doc = await fbDb.collection('users').doc(uid).get();
+            const profile = doc.exists ? doc.data() : {
+              uid,
+              fullName: cred.user.displayName || email.split('@')[0],
+              username: email.split('@')[0],
+              email
+            };
+            state.account = profile;
+            state.myName = profile.fullName || profile.username;
+            state.accountPromptDismissed = true;
+            saveState();
+            renderProfile();
+            el.modalAccount.classList.add('hidden');
+            showToast('Welcome back, @' + profile.username + '!');
+            return;
+          } catch (err) {
+            el.loginErrorMsg.textContent = (err && err.message) ? err.message : 'Invalid email or password.';
+            el.loginErrorMsg.classList.remove('hidden');
+            return;
+          }
+        }
+
+        const match = state.accounts.find(a => a.email === email && a.password === password);
+        if (!match) {
+          el.loginErrorMsg.textContent = 'No matching account on this browser. Check your email/password or use the Other Device tab.';
+          el.loginErrorMsg.classList.remove('hidden');
+          return;
+        }
+        state.account = match;
+        state.myName = match.fullName;
+        state.accountPromptDismissed = true;
+        saveState();
+        renderProfile();
+        el.modalAccount.classList.add('hidden');
+        showToast('Welcome back, @' + match.username + '!');
+      });
+
+      function generateSyncCode() {
+        const target = state.account || state.accounts[0];
+        if (!target) return null;
+        return btoa(unescape(encodeURIComponent(JSON.stringify(target))));
+      }
+
+      document.getElementById('btn-copy-my-sync').addEventListener('click', () => {
+        const code = generateSyncCode();
+        if (!code) { showToast('Create an account first to copy a Sync Code'); return; }
+        copyText(code);
+      });
+
+      document.getElementById('btn-profile-copy-sync').addEventListener('click', () => {
+        const code = generateSyncCode();
+        if (code) copyText(code);
+      });
+
+      document.getElementById('btn-apply-sync').addEventListener('click', () => {
+        const raw = el.syncCodeInput.value.trim();
+        if (!raw) return;
+        try {
+          const imported = JSON.parse(decodeURIComponent(escape(atob(raw))));
+          if (!imported || !imported.email || !imported.username) throw new Error('bad');
+          state.accounts = [imported, ...state.accounts.filter(a => a.email !== imported.email)];
+          state.account = imported;
+          state.myName = imported.fullName || imported.username;
+          if (imported.peerId) state.myPeerId = imported.peerId;
+          state.accountPromptDismissed = true;
+          saveState();
+          renderProfile();
+          el.modalAccount.classList.add('hidden');
+          showToast('Account restored for @' + imported.username + '!');
+        } catch (_) {
+          el.syncErrorMsg.textContent = 'Invalid Sync Code. Make sure you copied the full code.';
+          el.syncErrorMsg.classList.remove('hidden');
+        }
+      });
+
+      el.btnLogoutAccount.addEventListener('click', async () => {
+        if (fbEnabled && fbAuth) {
+          try { await fbAuth.signOut(); } catch (_) {}
+        }
+        Object.values(fbUnsubscribers).forEach(unsub => { try { unsub(); } catch (_) {} });
+        state.account = null;
+        state.myName = 'You';
+        saveState();
+        renderProfile();
+        el.modalProfile.classList.add('hidden');
+        switchAccountTab('login');
+        openAccountModal();
+        showToast('Logged out');
+      });
+
+      // Cloud Chat: Find Friend by Email in Firestore + Real-time listener
+      function subscribeCloudRoom(chat) {
+        if (!fbEnabled || !fbDb || !chat.roomId || fbUnsubscribers[chat.roomId]) return;
+        try {
+          const unsub = fbDb.collection('chats').doc(chat.roomId).collection('messages')
+            .orderBy('time', 'asc')
+            .onSnapshot((snap) => {
+              const myUid = state.account && state.account.uid;
+              const msgs = [];
+              snap.forEach((doc) => {
+                const d = doc.data();
+                msgs.push({
+                  id: d.id || doc.id,
+                  sender: d.senderUid === myUid ? 'me' : 'them',
+                  senderName: d.senderName || '',
+                  text: d.text || '',
+                  attachment: d.attachment || null,
+                  replyTo: d.replyTo || null,
+                  reaction: d.reaction || null,
+                  edited: Boolean(d.edited),
+                  time: d.time || Date.now(),
+                  status: 'read'
+                });
+              });
+              const prevLen = chat.messages.length;
+              chat.messages = msgs;
+              if (msgs.length > prevLen && msgs[msgs.length - 1].sender === 'them') {
+                if (state.activeChatId !== chat.id) chat.unread = (chat.unread || 0) + 1;
+                playChime();
+              }
+              saveState();
+              renderChatList();
+              if (state.activeChatId === chat.id) renderMessages();
+            });
+          fbUnsubscribers[chat.roomId] = unsub;
+        } catch (_) {}
+      }
+
+      document.getElementById('btn-find-by-email').addEventListener('click', async () => {
+        const friendEmail = document.getElementById('input-friend-email').value.trim().toLowerCase();
+        if (!friendEmail) {
+          showToast('Enter your friend’s Email ID');
+          return;
+        }
+        if (!fbEnabled || !fbDb || !state.account || !state.account.uid) {
+          showToast('Please log in with your account first');
+          return;
+        }
+        if (friendEmail === state.account.email) {
+          showToast('That is your own email!');
+          return;
+        }
+        try {
+          const snap = await fbDb.collection('users').where('email', '==', friendEmail).limit(1).get();
+          if (snap.empty) {
+            showToast('No user found with that email yet—ask them to create an account first');
+            return;
+          }
+          const friend = snap.docs[0].data();
+          const pair = [state.account.uid, friend.uid].sort();
+          const roomId = 'dm_' + pair[0] + '_' + pair[1];
+          const chatId = 'cloud-' + friend.uid;
+          let chat = state.chats.find(c => c.id === chatId);
+          if (!chat) {
+            chat = {
+              id: chatId,
+              roomId,
+              name: friend.fullName || friend.username || friendEmail,
+              type: 'cloud',
+              participants: [state.account.uid, friend.uid],
+              participantNames: {
+                [state.account.uid]: state.myName,
+                [friend.uid]: friend.fullName || friend.username || friendEmail
+              },
+              color: pickColor(friend.uid),
+              status: 'online',
+              unread: 0,
+              messages: []
+            };
+            state.chats.unshift(chat);
+          }
+          subscribeCloudRoom(chat);
+          saveState();
+          renderChatList();
+          selectChat(chatId);
+          closeConnectModal();
+          showToast('Cloud chat opened with ' + chat.name + '!');
+        } catch (err) {
+          showToast('Could not search user: ' + (err.message || 'check Firestore rules'));
+        }
+      });
+
+      // Re-subscribe any saved cloud chats & sync Firebase auth state on load
+      if (fbEnabled && fbAuth && fbDb) {
+        fbAuth.onAuthStateChanged(async (user) => {
+          if (user) {
+            try {
+              const doc = await fbDb.collection('users').doc(user.uid).get();
+              const profile = doc.exists ? doc.data() : {
+                uid: user.uid,
+                fullName: user.displayName || (user.email ? user.email.split('@')[0] : 'User'),
+                username: user.email ? user.email.split('@')[0] : 'user',
+                email: user.email || ''
+              };
+              state.account = profile;
+              state.myName = profile.fullName || profile.username;
+              state.accountPromptDismissed = true;
+              saveState();
+              renderProfile();
+              el.modalAccount.classList.add('hidden');
+              state.chats.filter(c => c.type === 'cloud' || c.type === 'group').forEach(subscribeCloudRoom);
+              fbDb.collection('chats').where('participants', 'array-contains', user.uid).get().then((roomsSnap) => {
+                let added = false;
+                roomsSnap.forEach((rDoc) => {
+                  const r = rDoc.data();
+                  const cid = r.type === 'group' ? ('group-' + rDoc.id) : ('cloud-' + (r.participants || []).find(p => p !== user.uid));
+                  if (!cid || state.chats.find(c => c.id === cid || c.roomId === rDoc.id)) return;
+                  const otherUid = (r.participants || []).find(p => p !== user.uid);
+                  const displayName = r.type === 'group'
+                    ? (r.name || 'Group Chat')
+                    : ((r.participantNames && otherUid && r.participantNames[otherUid]) || 'Cloud Friend');
+                  const restored = {
+                    id: cid,
+                    roomId: rDoc.id,
+                    name: displayName,
+                    type: r.type || 'cloud',
+                    participants: r.participants || [],
+                    participantNames: r.participantNames || {},
+                    color: pickColor(rDoc.id),
+                    status: 'online',
+                    unread: 0,
+                    messages: []
+                  };
+                  state.chats.unshift(restored);
+                  subscribeCloudRoom(restored);
+                  added = true;
+                });
+                if (added) {
+                  saveState();
+                  renderChatList();
+                }
+              }).catch(() => {});
+            } catch (_) {}
+          }
+        });
+      }
+
+      document.getElementById('btn-open-create-account').addEventListener('click', () => {
+        el.modalProfile.classList.add('hidden');
+        openAccountModal();
+      });
+
+      // Profile Modal
+      document.getElementById('btn-profile').addEventListener('click', () => {
+        el.inputMyName.value = state.myName;
+        el.modalProfile.classList.remove('hidden');
+      });
+      document.getElementById('btn-close-profile').addEventListener('click', () => el.modalProfile.classList.add('hidden'));
+      document.getElementById('btn-save-profile').addEventListener('click', () => {
+        const n = el.inputMyName.value.trim();
+        if (n) {
+          state.myName = n;
+          saveState();
+          renderProfile();
+        }
+        el.modalProfile.classList.add('hidden');
+      });
+
+      // Info Modal
+      document.getElementById('btn-chat-info').addEventListener('click', () => {
+        const chat = getActiveChat();
+        if (!chat) return;
+        el.infoContactName.textContent = chat.name;
+        el.infoContactId.textContent = chat.id;
+        el.infoContactStatus.textContent = chat.status;
+        el.modalInfo.classList.remove('hidden');
+      });
+      document.getElementById('btn-close-info').addEventListener('click', () => el.modalInfo.classList.add('hidden'));
+
+      document.getElementById('btn-clear-chat').addEventListener('click', () => {
+        const chat = getActiveChat();
+        if (!chat) return;
+        chat.messages = [];
+        saveState();
+        renderChatList();
+        renderMessages();
+        el.modalInfo.classList.add('hidden');
+        showToast('Messages cleared');
+      });
+
+      document.getElementById('btn-delete-chat').addEventListener('click', () => {
+        const chat = getActiveChat();
+        if (!chat) return;
+        state.chats = state.chats.filter(c => c.id !== chat.id);
+        state.activeChatId = state.chats[0] ? state.chats[0].id : null;
+        saveState();
+        renderChatList();
+        renderActiveChat();
+        el.modalInfo.classList.add('hidden');
+        showToast('Chat deleted');
+      });
+
+      // Mobile Back
+      document.getElementById('btn-back-mobile').addEventListener('click', () => {
+        el.chatPane.classList.add('hidden');
+        el.chatPane.classList.remove('flex');
+        el.sidebar.classList.remove('hidden');
+      });
+
+      // Reconnect peer
+      el.btnReconnectPeer.addEventListener('click', () => {
+        const chat = getActiveChat();
+        if (chat && chat.type === 'peer') connectToPeerId(chat.id, chat.name);
+      });
+
+      // Search sidebar
+      el.chatSearchInput.addEventListener('input', () => {
+        state.searchQuery = el.chatSearchInput.value;
+        el.btnClearSearch.classList.toggle('hidden', !state.searchQuery);
+        renderChatList();
+      });
+      el.btnClearSearch.addEventListener('click', () => {
+        el.chatSearchInput.value = '';
+        state.searchQuery = '';
+        el.btnClearSearch.classList.add('hidden');
+        renderChatList();
+      });
+
+      // In-chat search
+      document.getElementById('btn-in-chat-search').addEventListener('click', () => {
+        el.inChatSearchBar.classList.toggle('hidden');
+        if (!el.inChatSearchBar.classList.contains('hidden')) {
+          el.inChatSearchInput.focus();
+        } else {
+          el.inChatSearchInput.value = '';
+          state.inChatSearchQuery = '';
+          renderMessages();
+        }
+      });
+      document.getElementById('btn-close-in-chat-search').addEventListener('click', () => {
+        el.inChatSearchBar.classList.add('hidden');
+        el.inChatSearchInput.value = '';
+        state.inChatSearchQuery = '';
+        renderMessages();
+      });
+      el.inChatSearchInput.addEventListener('input', () => {
+        state.inChatSearchQuery = el.inChatSearchInput.value;
+        renderMessages();
+      });
+
+      // Composer
+      el.messageInput.addEventListener('input', () => {
+        el.messageInput.style.height = 'auto';
+        el.messageInput.style.height = Math.min(el.messageInput.scrollHeight, 112) + 'px';
+        updateSendVoiceButtons();
+
+        const chat = getActiveChat();
+        if (chat && (chat.type === 'peer' || chat.type === 'manual')) {
+          const conn = state.connections[chat.id];
+          if (conn && (conn.open || conn.readyState === 'open')) {
+            try {
+              const p = { kind: 'typing', isTyping: true };
+              conn.send(conn.readyState === 'open' ? JSON.stringify(p) : p);
+              clearTimeout(state.typingTimers[chat.id]);
+              state.typingTimers[chat.id] = setTimeout(() => {
+                try {
+                  const s = { kind: 'typing', isTyping: false };
+                  conn.send(conn.readyState === 'open' ? JSON.stringify(s) : s);
+                } catch (_) {}
+              }, 1400);
+            } catch (_) {}
+          }
+        }
+      });
+
+      el.messageInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+          e.preventDefault();
+          sendCurrentMessage();
+        }
+      });
+
+      el.btnSend.addEventListener('click', () => sendCurrentMessage());
+
+      // Emoji picker
+      document.getElementById('btn-emoji-toggle').addEventListener('click', () => {
+        el.emojiPicker.classList.toggle('hidden');
+      });
+      document.getElementById('btn-close-emoji').addEventListener('click', () => {
+        el.emojiPicker.classList.add('hidden');
+      });
+
+      // Attachments
+      el.btnAttach.addEventListener('click', () => el.fileInput.click());
+      el.fileInput.addEventListener('change', (e) => {
+        const file = e.target.files && e.target.files[0];
+        if (!file) return;
+        if (file.size > 4 * 1024 * 1024) {
+          showToast('Please choose a file under 4 MB');
+          el.fileInput.value = '';
+          return;
+        }
+        const reader = new FileReader();
+        reader.onload = () => {
+          sendCurrentMessage({
+            name: file.name,
+            type: file.type || 'application/octet-stream',
+            data: reader.result
+          });
+        };
+        reader.readAsDataURL(file);
+        el.fileInput.value = '';
+      });
+
+      // Voice note recording
+      el.btnVoice.addEventListener('click', async () => {
+        if (state.isRecording && state.mediaRecorder) {
+          state.mediaRecorder.stop();
+          state.isRecording = false;
+          el.btnVoice.classList.remove('text-rose-500');
+          return;
+        }
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+          showToast('Microphone is not supported in this browser');
+          return;
+        }
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          const mr = new MediaRecorder(stream);
+          state.mediaRecorder = mr;
+          state.recordingChunks = [];
+          state.isRecording = true;
+          el.btnVoice.classList.add('text-rose-500');
+          let recSeconds = 0;
+          el.voiceTimerText.textContent = '0:00';
+          el.voiceTimer.classList.remove('hidden');
+          const recTimer = setInterval(() => {
+            recSeconds++;
+            const m = Math.floor(recSeconds / 60);
+            const sec = String(recSeconds % 60).padStart(2, '0');
+            el.voiceTimerText.textContent = `${m}:${sec}`;
+          }, 1000);
+          showToast('Recording... click mic again to send');
+
+          mr.ondataavailable = (ev) => {
+            if (ev.data.size > 0) state.recordingChunks.push(ev.data);
+          };
+          mr.onstop = () => {
+            clearInterval(recTimer);
+            el.voiceTimer.classList.add('hidden');
+            stream.getTracks().forEach(t => t.stop());
+            const blob = new Blob(state.recordingChunks, { type: 'audio/webm' });
+            const reader = new FileReader();
+            reader.onload = () => {
+              sendCurrentMessage({
+                name: 'voice-note.webm',
+                type: 'audio/webm',
+                data: reader.result
+              });
+            };
+            reader.readAsDataURL(blob);
+          };
+          mr.start();
+        } catch (_) {
+          showToast('Microphone permission denied or unavailable');
+        }
+      });
+
+      // Delegated events inside messages feed (reply, react, lightbox)
+      el.messagesFeed.addEventListener('click', (e) => {
+        const replyBtn = e.target.closest('[data-reply-id]');
+        if (replyBtn) {
+          const chat = getActiveChat();
+          const msg = chat && chat.messages.find(m => m.id === replyBtn.getAttribute('data-reply-id'));
+          if (msg) {
+            state.replyTo = {
+              id: msg.id,
+              senderName: msg.sender === 'me' ? state.myName : chat.name,
+              text: msg.text || (msg.attachment ? msg.attachment.name : '')
+            };
+            el.replyBannerSender.textContent = state.replyTo.senderName;
+            el.replyBannerText.textContent = state.replyTo.text;
+            el.replyBanner.classList.remove('hidden');
+            el.messageInput.focus();
+          }
+          return;
+        }
+
+        const reactBtn = e.target.closest('[data-react-id]');
+        if (reactBtn) {
+          const chat = getActiveChat();
+          const id = reactBtn.getAttribute('data-react-id');
+          const emoji = reactBtn.getAttribute('data-emoji') || '👍';
+          const msg = chat && chat.messages.find(m => m.id === id);
+          if (msg) {
+            msg.reaction = msg.reaction === emoji ? null : emoji;
+            saveState();
+            renderMessages();
+            if ((chat.type === 'cloud' || chat.type === 'group') && fbEnabled && fbDb && chat.roomId) {
+              fbDb.collection('chats').doc(chat.roomId).collection('messages').doc(id).update({ reaction: msg.reaction }).catch(() => {});
+            } else {
+              const conn = state.connections[chat.id];
+              if (conn && (conn.open || conn.readyState === 'open')) {
+                try {
+                  const p = { kind: 'react', id, reaction: msg.reaction };
+                  conn.send(conn.readyState === 'open' ? JSON.stringify(p) : p);
+                } catch (_) {}
+              }
+            }
+          }
+          return;
+        }
+
+        const copyBtn = e.target.closest('[data-copy-id]');
+        if (copyBtn) {
+          const chat = getActiveChat();
+          const msg = chat && chat.messages.find(m => m.id === copyBtn.getAttribute('data-copy-id'));
+          if (msg && msg.text) copyText(msg.text);
+          return;
+        }
+
+        const editBtn = e.target.closest('[data-edit-id]');
+        if (editBtn) {
+          const chat = getActiveChat();
+          const id = editBtn.getAttribute('data-edit-id');
+          const msg = chat && chat.messages.find(m => m.id === id);
+          if (msg && msg.text) {
+            el.messageInput.value = msg.text;
+            el.messageInput.focus();
+            updateSendVoiceButtons();
+            // Remove old message so re-sending acts as an edit, or update in place:
+            chat.messages = chat.messages.filter(m => m.id !== id);
+            saveState();
+            renderMessages();
+            if ((chat.type === 'cloud' || chat.type === 'group') && fbEnabled && fbDb && chat.roomId) {
+              fbDb.collection('chats').doc(chat.roomId).collection('messages').doc(id).delete().catch(() => {});
+            }
+            showToast('Edit your message and press Enter to resend');
+          }
+          return;
+        }
+
+        const deleteBtn = e.target.closest('[data-delete-id]');
+        if (deleteBtn) {
+          const chat = getActiveChat();
+          const id = deleteBtn.getAttribute('data-delete-id');
+          if (chat) {
+            chat.messages = chat.messages.filter(m => m.id !== id);
+            saveState();
+            renderChatList();
+            renderMessages();
+            if ((chat.type === 'cloud' || chat.type === 'group') && fbEnabled && fbDb && chat.roomId) {
+              fbDb.collection('chats').doc(chat.roomId).collection('messages').doc(id).delete().catch(() => {});
+            }
+            showToast('Message deleted');
+          }
+          return;
+        }
+
+        const img = e.target.closest('[data-lightbox]');
+        if (img) {
+          el.lightboxImg.src = img.getAttribute('data-lightbox');
+          el.modalLightbox.classList.remove('hidden');
+        }
+      });
+
+      document.getElementById('btn-cancel-reply').addEventListener('click', clearReply);
+      document.getElementById('btn-close-lightbox').addEventListener('click', () => el.modalLightbox.classList.add('hidden'));
+
+      // Scroll-to-bottom visibility
+      el.messagesFeed.addEventListener('scroll', () => {
+        const dist = el.messagesFeed.scrollHeight - el.messagesFeed.scrollTop - el.messagesFeed.clientHeight;
+        el.btnScrollBottom.classList.toggle('hidden', dist < 160);
+      });
+      el.btnScrollBottom.addEventListener('click', () => {
+        el.messagesFeed.scrollTo({ top: el.messagesFeed.scrollHeight, behavior: 'smooth' });
+      });
+
+      // Drag & Drop + Clipboard Paste Image
+      el.chatPane.addEventListener('dragover', (e) => { e.preventDefault(); });
+      el.chatPane.addEventListener('drop', (e) => {
+        e.preventDefault();
+        const file = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+        if (!file) return;
+        if (file.size > 4 * 1024 * 1024) { showToast('Please drop a file under 4 MB'); return; }
+        const reader = new FileReader();
+        reader.onload = () => sendCurrentMessage({ name: file.name, type: file.type || 'application/octet-stream', data: reader.result });
+        reader.readAsDataURL(file);
+      });
+      el.messageInput.addEventListener('paste', (e) => {
+        const items = e.clipboardData && e.clipboardData.items;
+        if (!items) return;
+        for (const item of items) {
+          if (item.type && item.type.startsWith('image/')) {
+            const file = item.getAsFile();
+            if (!file) continue;
+            const reader = new FileReader();
+            reader.onload = () => sendCurrentMessage({ name: 'pasted-image.png', type: file.type, data: reader.result });
+            reader.readAsDataURL(file);
+            e.preventDefault();
+            break;
+          }
+        }
+      });
+
+      // Group Chat Modal
+      document.getElementById('btn-new-group').addEventListener('click', () => {
+        el.groupErrorMsg.classList.add('hidden');
+        el.inputGroupName.value = '';
+        el.inputGroupEmails.value = '';
+        el.modalGroup.classList.remove('hidden');
+      });
+      document.getElementById('btn-close-group').addEventListener('click', () => el.modalGroup.classList.add('hidden'));
+      document.getElementById('btn-cancel-group').addEventListener('click', () => el.modalGroup.classList.add('hidden'));
+
+      el.formCreateGroup.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const gName = el.inputGroupName.value.trim();
+        const rawEmails = el.inputGroupEmails.value.split(',').map(x => x.trim().toLowerCase()).filter(Boolean);
+        if (!gName || rawEmails.length === 0) {
+          el.groupErrorMsg.textContent = 'Enter a group name and at least one member Email ID.';
+          el.groupErrorMsg.classList.remove('hidden');
+          return;
+        }
+        if (!fbEnabled || !fbDb || !state.account || !state.account.uid) {
+          el.groupErrorMsg.textContent = 'Please log in with your account first to create a Cloud Group Chat.';
+          el.groupErrorMsg.classList.remove('hidden');
+          return;
+        }
+        try {
+          const participants = [state.account.uid];
+          const participantNames = { [state.account.uid]: state.myName };
+          for (const em of rawEmails) {
+            if (em === state.account.email) continue;
+            const snap = await fbDb.collection('users').where('email', '==', em).limit(1).get();
+            if (!snap.empty) {
+              const u = snap.docs[0].data();
+              if (!participants.includes(u.uid)) {
+                participants.push(u.uid);
+                participantNames[u.uid] = u.fullName || u.username || em;
+              }
+            }
+          }
+          if (participants.length < 2) {
+            el.groupErrorMsg.textContent = 'None of those emails have an account yet—ask your friends to sign up first!';
+            el.groupErrorMsg.classList.remove('hidden');
+            return;
+          }
+          const roomId = 'grp_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6);
+          await fbDb.collection('chats').doc(roomId).set({
+            roomId,
+            type: 'group',
+            name: gName,
+            participants,
+            participantNames,
+            createdBy: state.account.uid,
+            updatedAt: Date.now()
+          });
+          const chatId = 'group-' + roomId;
+          const chat = {
+            id: chatId,
+            roomId,
+            name: gName,
+            type: 'group',
+            participants,
+            participantNames,
+            color: pickColor(roomId),
+            status: 'online',
+            unread: 0,
+            messages: []
+          };
+          state.chats.unshift(chat);
+          subscribeCloudRoom(chat);
+          saveState();
+          renderChatList();
+          selectChat(chatId);
+          el.modalGroup.classList.add('hidden');
+          showToast('Group "' + gName + '" created!');
+        } catch (err) {
+          el.groupErrorMsg.textContent = 'Could not create group: ' + (err.message || 'check Firestore rules');
+          el.groupErrorMsg.classList.remove('hidden');
+        }
+      });
+
+      // Global Escape key closes open modals/popovers
+      document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+          el.emojiPicker.classList.add('hidden');
+          el.modalConnect.classList.add('hidden');
+          el.modalProfile.classList.add('hidden');
+          el.modalInfo.classList.add('hidden');
+          el.modalLightbox.classList.add('hidden');
+          el.modalGroup.classList.add('hidden');
+          el.modalAccount.classList.add('hidden');
+        }
+      });
+
+      // ---------- Init ----------
+      applyTheme();
+      renderProfile();
+      renderChatList();
+      renderActiveChat();
+      initPeerJS();
+      if (!state.account && !state.accountPromptDismissed) {
+        openAccountModal();
+      }
+    })();
+  </script>
+</body>
+</html>
